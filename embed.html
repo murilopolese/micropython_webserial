@@ -4,14 +4,43 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Embeding on a page</title>
+    <style media="screen">
+      * {
+        font-family: monospace;
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 1em;
+      }
+      iframe {
+        border: none;
+      }
+    </style>
   </head>
   <body>
     <h1>Embeding on a page:</h1>
     <iframe
-      width="800px"
+      width="100%"
       height="600px"
-      src="https://murilopolese.github.io/micropython_webserial/#https://raw.githubusercontent.com/arduino/BT81x-mpy/main/examples/backbuffer.py?token=GHSAT0AAAAAACPJSRKKBZEMQL37W45ISF6WZTT747A"
+      src="https://murilopolese.github.io/micropython_webserial/"
       >
     </iframe>
+    <div>
+      <p>Click on the buttons to change the content</p>
+      <button onclick="update('https://raw.githubusercontent.com/arduino/arduino-alvik-mpy/main/examples/demo.py')">Load Alvik demo</button>
+      <button onclick="update('https://gist.githubusercontent.com/murilopolese/a3e737c8bc3f0f371c50bc0420647c26/raw/288302633139e5dfb51085a7338156ff06bc6ec9/main.py')">Load infinit loop example</button>
+    </div>
+    <div>
+      <p>Bring your own source code</p>
+      <input type="text" onchange="update(this.value)">
+    </div>
+
+    <script type="text/javascript">
+      function update(url) {
+        const iframeEl = document.querySelector('iframe')
+        iframeEl.src = `https://murilopolese.github.io/micropython_webserial/#${url}`
+      }
+    </script>
   </body>
 </html>
