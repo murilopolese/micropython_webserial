@@ -30,10 +30,11 @@
       <p>Click on the buttons to change the content</p>
       <button onclick="update('https://raw.githubusercontent.com/arduino/arduino-alvik-mpy/main/examples/demo.py')">Load Alvik demo</button>
       <button onclick="update('https://gist.githubusercontent.com/murilopolese/a3e737c8bc3f0f371c50bc0420647c26/raw/288302633139e5dfb51085a7338156ff06bc6ec9/main.py')">Load infinit loop example</button>
+      <button onclick="update('https://raw.githubusercontent.com/arduino/arduino-runtime-mpy/main/arduino/arduino.py')">Load runtime source code</button>
     </div>
     <div>
       <p>Bring your own source code</p>
-      <input type="text" onchange="update(this.value)">
+      <input type="text" placeholder="url" onchange="update(this.value)">
     </div>
 
     <script type="text/javascript">
