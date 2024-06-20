@@ -1,77 +1,26 @@
 import { CodeMirrorEditor } from './views/components/elements/editor.js'
 import { XTerm } from './views/components/elements/terminal.js'
 
+const log = console.log
 
 let port
 let reader
 let writer
 
-async function readForeverAndReport(cb) {
-  try {
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) {
-        // Allow the serial port to be closed later.
-        reader.releaseLock();
-        break;
-      }
-      if (value) {
-        cb(value);
-      }
-    }
-  } catch (error) {
-    // TODO: Handle non-fatal read error.
-  }
-}
+const newFileContent = ``
 
-async function connect() {
+function sleep(millis) {
   return new Promise((resolve, reject) => {
-    navigator.serial.requestPort({ filters: [ {usbVendorId: 0x2341} ]})
-    .then(async (port) => {
-      await port.open({ baudRate: 115200 })
-      reader = port.readable.getReader()
-      writer = port.writable.getWriter()
-      resolve(port)
-    })
-    .catch(reject)
+    setTimeout(() => {
+      resolve()
+    }, millis)
   })
 }
 
-async function disconnect() {
-  try {
-    writer.releaseLock()
-    reader.releaseLock()
-    await port.close()
-  } catch(e) {
-    console.log(`Can't disconnect`, e)
-  }
-  return Promise.resolve()
-}
-
-async function write(str) {
-  const textEncoder = new TextEncoder()
-  const uint8Array = textEncoder.encode(str)
-  await writer.write(uint8Array)
-}
-
-const log = console.log
-
-const newFileContent = `from nesso import *
-
-def setup():
-  background(255)
-
-start(setup)
-`
-
 export async function store(state, emitter) {
-  state.openFiles = []
-  state.selectedFiles = []
   state.editingFile = null
-
   state.isConnecting = false
   state.isConnected = false
-
   state.isTerminalBound = false
 
   const newFile = createEmptyFile({
@@ -82,8 +31,29 @@ export async function store(state, emitter) {
     newFile.hasChanges = true
     emitter.emit('render')
   }
-  state.openFiles.push(newFile)
-  state.editingFile = newFile.id
+  let l = location.hash.slice(1)
+  if (l) {
+    let code = await (await fetch(l)).text()
+    newFile.editor.content = code
+    emitter.emit('render')
+  }
+  window.addEventListener('hashchange', async () => {
+    console.log('hash changed')
+    let l = location.hash.slice(1)
+    if (l) {
+      let code = await (await fetch(l)).text()
+      let editor = state.editingFile.editor.editor
+      editor.dispatch({
+        changes: {
+          from: 0,
+          to: editor.state.doc.length,
+          insert: code
+        }
+      })
+    }
+  })
+
+  state.editingFile = newFile
 
   state.savedPanelHeight = PANEL_DEFAULT
   state.panelHeight = PANEL_CLOSED
@@ -97,6 +67,51 @@ export async function store(state, emitter) {
     emitter.emit('render')
   }
 
+
+  async function readForeverAndReport(cb) {
+    try {
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) {
+          // Allow the serial port to be closed later.
+          reader.releaseLock();
+          break;
+        }
+        if (value) {
+          cb(value);
+        }
+      }
+    } catch (error) {
+      // TODO: Handle non-fatal read error.
+    }
+  }
+  async function connect() {
+    return new Promise((resolve, reject) => {
+      navigator.serial.requestPort({ filters: [ {usbVendorId: 0x2341} ]})
+      .then(async (port) => {
+        await port.open({ baudRate: 115200 })
+        reader = port.readable.getReader()
+        writer = port.writable.getWriter()
+        resolve(port)
+      })
+      .catch(reject)
+    })
+  }
+  async function disconnect() {
+    try {
+      writer.releaseLock()
+      reader.releaseLock()
+      await port.close()
+    } catch(e) {
+      console.log(`Can't disconnect`, e)
+    }
+    return Promise.resolve()
+  }
+  async function write(str) {
+    const textEncoder = new TextEncoder()
+    const uint8Array = textEncoder.encode(str)
+    await writer.write(uint8Array)
+  }
   // also known as stop
   async function getPrompt() {
     state.readingUntil = '>>>'
@@ -111,7 +126,6 @@ export async function store(state, emitter) {
     state.readingBuffer = ''
     state.resolveReadingUntilPromise = null
   }
-
   async function reset() {
     state.readingUntil = '>>>'
     state.readingBuffer = ''
@@ -124,7 +138,6 @@ export async function store(state, emitter) {
     state.readingBuffer = ''
     state.resolveReadingUntilPromise = null
   }
-
   async function enterRawRepl() {
     state.readingUntil = 'raw REPL; CTRL-B to exit'
     state.readingBuffer = ''
@@ -229,14 +242,19 @@ export async function store(state, emitter) {
       alert('You are already running code!')
       return false
     }
-    const openFile = state.openFiles.find(f => f.id == state.editingFile)
-    const code = openFile.editor.editor.state.doc.toString()
+    const code = state.editingFile.editor.editor.state.doc.toString()
     sessionStorage.setItem('code', code)
     emitter.emit('open-panel')
     emitter.emit('render')
     try {
       await enterRawRepl()
-      await executeRaw(code)
+      for (let i = 0; i < code.length; i += 128) {
+        const c = code.slice(i, i+128)
+        await write(c)
+        await sleep(10)
+      }
+      await write('\x04')
+      await sleep(10)
       await exitRawRepl()
     } catch(e) {
       log('error', e)
