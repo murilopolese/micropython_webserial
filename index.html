@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Arduino Lab for MicroPython</title>
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="libs/xterm.css">
+    <link rel="stylesheet" href="main.css">
+    <link rel="shortcut icon" href="media/icon.png">
+
+    <!-- 3rd party dependencies -->
+    <script type="text/javascript" src="libs/codemirror.js" charset="utf-8"></script>
+    <script type="text/javascript" src="libs/xterm.js" charset="utf-8"></script>
+    <script type="text/javascript" src="libs/xterm-addon-fit.js" charset="utf-8"></script>
+    <script type="text/javascript" src="libs/choo.js" charset="utf-8"></script>
+    <script type="text/javascript" src="libs/words.js" charset="utf-8"></script>
+    <script type="text/javascript">
+      const PANEL_CLOSED = 45
+      const PANEL_TOO_SMALL = 65
+      const PANEL_DEFAULT = 320
+    </script>
+    <!-- Application source code -->
+		<script type="module" src="main.js" charset="utf-8"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>
