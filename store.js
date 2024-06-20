@@ -87,7 +87,7 @@ export async function store(state, emitter) {
   }
   async function connect() {
     return new Promise((resolve, reject) => {
-      navigator.serial.requestPort({ filters: [ {usbVendorId: 0x2341} ]})
+      navigator.serial.requestPort()
       .then(async (port) => {
         await port.open({ baudRate: 115200 })
         reader = port.readable.getReader()
