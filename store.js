@@ -22,38 +22,13 @@ export async function store(state, emitter) {
   state.isConnecting = false
   state.isConnected = false
   state.isTerminalBound = false
+  state.boardFiles = []
+  state.isLoadingFiles = false
 
-  const newFile = createEmptyFile({
-    parentFolder: null, // Null parent folder means not saved?
-    source: 'disk'
-  })
-  newFile.editor.onChange = function() {
-    newFile.hasChanges = true
-    emitter.emit('render')
-  }
-  let l = location.hash.slice(1)
-  if (l) {
-    let code = await (await fetch(l)).text()
-    newFile.editor.content = code
-    emitter.emit('render')
-  }
-  window.addEventListener('hashchange', async () => {
-    console.log('hash changed')
-    let l = location.hash.slice(1)
-    if (l) {
-      let code = await (await fetch(l)).text()
-      let editor = state.editingFile.editor.editor
-      editor.dispatch({
-        changes: {
-          from: 0,
-          to: editor.state.doc.length,
-          insert: code
-        }
-      })
-    }
-  })
-
-  state.editingFile = newFile
+  state.readingBuffer = ''
+  state.readingUntil = null
+  state.resolveReadingUntilPromise = () => Promise.resolve()
+  state.rejectReadingUntilPromise = () => Promise.reject()
 
   state.savedPanelHeight = PANEL_DEFAULT
   state.panelHeight = PANEL_CLOSED
@@ -67,6 +42,15 @@ export async function store(state, emitter) {
     emitter.emit('render')
   }
 
+  const newFile = createEmptyFile({
+    parentFolder: null, // Null parent folder means not saved?
+    source: 'disk'
+  })
+  newFile.editor.onChange = function() {
+    newFile.hasChanges = true
+    emitter.emit('render')
+  }
+  state.editingFile = newFile
 
   async function readForeverAndReport(cb) {
     try {
@@ -114,17 +98,8 @@ export async function store(state, emitter) {
   }
   // also known as stop
   async function getPrompt() {
-    state.readingUntil = '>>>'
-    state.readingBuffer = ''
-    const promise = new Promise((resolve, reject) => {
-      state.resolveReadingUntilPromise = resolve
-    })
-    // this will stop execution and exit raw repl if it's the case
     write('\x03\x02')
-    await promise
-    state.readingUntil = null
-    state.readingBuffer = ''
-    state.resolveReadingUntilPromise = null
+    await readUntil('>>>')
   }
   async function reset() {
     state.readingUntil = '>>>'
@@ -139,43 +114,159 @@ export async function store(state, emitter) {
     state.resolveReadingUntilPromise = null
   }
   async function enterRawRepl() {
-    state.readingUntil = 'raw REPL; CTRL-B to exit'
-    state.readingBuffer = ''
-    const promise = new Promise((resolve, reject) => {
-      state.resolveReadingUntilPromise = resolve
-    })
     write('\x01')
-    await promise
-    state.readingUntil = null
-    state.readingBuffer = ''
-    state.resolveReadingUntilPromise = null
+    await readUntil('raw REPL; CTRL-B to exit')
   }
   async function exitRawRepl() {
-    state.readingUntil = '>>>'
-    state.readingBuffer = ''
-    const promise = new Promise((resolve, reject) => {
-      state.resolveReadingUntilPromise = resolve
-    })
     write('\x02')
-    await promise
-    state.readingUntil = null
-    state.readingBuffer = ''
-    state.resolveReadingUntilPromise = null
+    await readUntil('>>>')
   }
   async function executeRaw(code) {
-    state.readingUntil = '\x04>'
-    state.readingBuffer = ''
-    const promise = new Promise((resolve, reject) => {
-      state.resolveReadingUntilPromise = resolve
-    })
-    await write(code)
+    for (let i = 0; i < code.length; i += 128) {
+      const c = code.slice(i, i+128)
+      await write(c)
+      await sleep(10)
+    }
     await write('\x04')
-    await promise
-    state.readingUntil = null
-    state.readingBuffer = ''
-    state.resolveReadingUntilPromise = null
+    return await readUntil('\x04>')
   }
 
+  async function readUntil(token) {
+    if (state.readingUntil) {
+      // Already reading until
+      console.log('already running read until')
+      return Promise.reject()
+    }
+    // Those variables are going to be referenced on emitter.on('data')
+    state.readingUntil = token
+    state.readingBuffer = ''
+    return new Promise((resolve, reject) => {
+      // Those functions are going to be called on emitter.on('data')
+      state.resolveReadingUntilPromise = (result) => {
+        state.readingUntil = null
+        state.readingBuffer = ''
+        resolve(result)
+      }
+    })
+  }
+
+  async function getBoardFiles(path) {
+    await runHelper()
+
+    // await getPrompt()
+    await enterRawRepl()
+    let out = await executeRaw(`print(json.dumps(get_all_files("")))`)
+    await exitRawRepl()
+
+    let files = JSON.parse(out.split('OK')[1].split('\x04')[0])
+    // files = files.map(f => f.path)
+
+    let tree = files.reduce((r, file) => {
+      file.path.split('/')
+      .filter(a => a)
+      .reduce((childNodes, title) => {
+        let child = childNodes.find(n => n.title === title)
+        if (!child) childNodes.push(child = { title, type: file.type, path: file.path, childNodes: [] })
+        return child.childNodes
+      }, r)
+      return r
+    }, [])
+    return tree
+  }
+  async function runHelper() {
+    const code = `import os
+import json
+os.chdir('/')
+def is_directory(path):
+  return True if os.stat(path)[0] == 0x4000 else False
+
+def get_all_files(path, array_of_files = []):
+    files = os.ilistdir(path)
+    for file in files:
+        is_folder = file[1] == 16384
+        p = path + '/' + file[0]
+        array_of_files.append({
+            "path": p,
+            "type": "folder" if is_folder else "file"
+        })
+        if is_folder:
+            array_of_files = get_all_files(p, array_of_files)
+    return array_of_files
+
+
+def ilist_all(path):
+    print(json.dumps(get_all_files(path)))
+
+def delete_folder(path):
+    files = get_all_files(path)
+    for file in files:
+        if file['type'] == 'file':
+            os.remove(file['path'])
+    for file in reversed(files):
+        if file['type'] == 'folder':
+            os.rmdir(file['path'])
+    os.rmdir(path)
+  `
+    await getPrompt()
+    await enterRawRepl()
+    const out = await executeRaw(code)
+    await exitRawRepl()
+    return out
+  }
+
+  async function loadFile(path) {
+    await getPrompt()
+    await enterRawRepl()
+    let output = await executeRaw(
+      `with open('${path}','r') as f:\n while 1:\n  b=f.read(256)\n  if not b:break\n  print(b,end='')`
+    )
+    await exitRawRepl()
+    return output.split('OK')[1].split('\x04')[0]
+  }
+
+  async function saveFile(path, content) {
+    await getPrompt()
+    await enterRawRepl()
+    await executeRaw(`f=open('${path}','w')\nw=f.write`)
+    for (let i = 0; i < content.length; i += 100) {
+      const c = content.slice(i, i+100)
+      await write(`w("""${c}""")`)
+      await sleep(10)
+      await write('\x04')
+      await readUntil('\x04>')
+    }
+    await write(`f.close()`)
+    await sleep(10)
+    await write('\x04')
+    await readUntil('\x04>')
+    await exitRawRepl()
+  }
+
+  function createFile(args) {
+    const {
+      path,
+      content = newFileContent,
+      hasChanges = false
+    } = args
+    const id = generateHash()
+    const editor = state.cache(CodeMirrorEditor, `editor_${id}`)
+    editor.content = content
+    return {
+      id,
+      path,
+      editor,
+      hasChanges
+    }
+  }
+
+  function createEmptyFile({ source, parentFolder }) {
+    return createFile({
+      fileName: generateFileName(),
+      parentFolder,
+      source,
+      hasChanges: true
+    })
+  }
 
   // START AND BASIC ROUTING
   emitter.on('connect', async() => {
@@ -219,6 +310,8 @@ export async function store(state, emitter) {
     emitter.emit('render')
     setTimeout(() => {
       if (state.isConnected) {
+        state.isTreePanelOpen = true
+        emitter.emit('refresh-files')
         emitter.emit('open-panel')
       }
     }, 100)
@@ -229,21 +322,16 @@ export async function store(state, emitter) {
     state.panelHeight = PANEL_CLOSED
     state.boardFiles = []
     state.boardNavigationPath = '/'
+    state.isTreePanelOpen = false
     // emitter.emit('refresh-files')
     emitter.emit('render')
   })
 
   // CODE EXECUTION
   emitter.on('run', async () => {
-    await getPrompt()
     log('run')
-    if (state.readingUntil) {
-      alert('Hold on!')
-      alert('You are already running code!')
-      return false
-    }
+    await getPrompt()
     const code = state.editingFile.editor.editor.state.doc.toString()
-    sessionStorage.setItem('code', code)
     emitter.emit('open-panel')
     emitter.emit('render')
     try {
@@ -254,7 +342,7 @@ export async function store(state, emitter) {
         await sleep(10)
       }
       await write('\x04')
-      await sleep(10)
+      await readUntil('\x04>')
       await exitRawRepl()
     } catch(e) {
       log('error', e)
@@ -289,7 +377,7 @@ export async function store(state, emitter) {
         state.resolveReadingUntilPromise(response)
       }
     }
-    log('data', data)
+    // log('data', data)
   })
 
   // PANEL
@@ -323,40 +411,44 @@ export async function store(state, emitter) {
     window.removeEventListener('mousemove', state.resizePanel)
   })
 
-  function createFile(args) {
-    const {
-      source,
-      parentFolder,
-      fileName,
-      content = newFileContent,
-      hasChanges = false
-    } = args
-    const id = generateHash()
-    const editor = state.cache(CodeMirrorEditor, `editor_${id}`)
-    try {
-      let code = sessionStorage.getItem('code')
-      editor.content = code
-    } catch(e) {
-      editor.content = content
-    }
-    return {
-      id,
-      source,
-      parentFolder,
-      fileName,
-      editor,
-      hasChanges
-    }
-  }
+  // TREE VIEW
+  emitter.on('refresh-files', async () => {
+    log('refresh-files')
+    if (state.isLoadingFiles) return
+    state.isLoadingFiles = true
+    emitter.emit('render')
 
-  function createEmptyFile({ source, parentFolder }) {
-    return createFile({
-      fileName: generateFileName(),
-      parentFolder,
-      source,
-      hasChanges: true
-    })
-  }
+    if (state.isConnected) {
+      state.boardFiles = await getBoardFiles('')
+    } else {
+      state.boardFiles = []
+    }
+
+    state.isLoadingFiles = false
+    emitter.emit('render')
+  })
+  emitter.on('toggle-tree-panel', () => {
+    state.isTreePanelOpen = !state.isTreePanelOpen
+    emitter.emit('refresh-files')
+    emitter.emit('render')
+  })
+  emitter.on('load-file', async (path) => {
+    log('load-file', path)
+    const out = await loadFile(path)
+    const editorState = state.editingFile.editor.editor.state
+    const update = editorState.update({changes: {from: 0, to: editorState.doc.length, insert: out}})
+    state.editingFile.editor.editor.update([update])
+    state.editingFile.path = path
+  })
+  emitter.on('save', async () => {
+    log('save')
+    const code = state.editingFile.editor.editor.state.doc.toString()
+    await saveFile(state.editingFile.path, code)
+
+  })
+
+
+
 }
 
 function generateHash() {

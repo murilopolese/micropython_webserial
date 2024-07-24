@@ -34,6 +34,20 @@ export function Toolbar(state, emit) {
         onClick: () => emit('reset')
       })}
 
+      <div class="separator"></div>
+
+      ${Button({
+        icon: 'save.svg',
+        tooltip: 'Save',
+        disabled: !_canSave,
+        onClick: () => emit('save')
+      })}
+      ${Button({
+        icon: 'files.svg',
+        tooltip: 'Save',
+        disabled: !_canExecute,
+        onClick: () => emit('toggle-tree-panel')
+      })}
     </div>
   `
 }

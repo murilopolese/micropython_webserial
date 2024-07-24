@@ -12,7 +12,7 @@ export class XTerm extends Component {
   }
 
   createElement() {
-    return html`<div class="terminal-wrapper"></div>`
+    return html`<div id="terminal-wrapper"></div>`
   }
 
   update() {

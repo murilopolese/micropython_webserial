@@ -15,12 +15,12 @@ export function ReplPanel(state, emit) {
 
   return html`
     <div id="panel" style="height: ${state.panelHeight}px">
-      <div class="panel-bar">
+      <div id="panel-bar">
         <div id="drag-handle"
           onmousedown=${() => emit('start-resizing-panel')}
           onmouseup=${() => emit('stop-resizing-panel')}
           ></div>
-        <div class="term-operations ${termOperationsVisibility}">
+        <div id="term-operations" class="${termOperationsVisibility}">
           ${ReplOperations(state, emit)}
         </div>
         ${Button({
