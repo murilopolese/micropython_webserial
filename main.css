@@ -554,6 +554,8 @@ button.small .icon {
   gap: 5px;
   cursor: pointer;
 }
+
+.item.selected,
 .item:hover {
   background: #ECF1F1;
 }

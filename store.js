@@ -52,6 +52,7 @@ export async function store(state, emitter) {
     emitter.emit('render')
   }
   state.editingFile = newFile
+  state.openedFolders = []
 
   async function readForeverAndReport(cb) {
     try {
@@ -160,18 +161,35 @@ export async function store(state, emitter) {
     await exitRawRepl()
 
     let files = JSON.parse(out.split('OK')[1].split('\x04')[0])
-    // files = files.map(f => f.path)
 
+    // Hold you hat, nested reduce ahead
+    // TODO: Optimize this step
     let tree = files.reduce((r, file) => {
       file.path.split('/')
       .filter(a => a)
       .reduce((childNodes, title) => {
         let child = childNodes.find(n => n.title === title)
-        if (!child) childNodes.push(child = { title, type: file.type, path: file.path, childNodes: [] })
+        if (!child) {
+          child = {
+            title: title,
+            type: file.type,
+            path: file.path,
+            childNodes: []
+          }
+          childNodes.push(child)
+        }
+        // Sort by type, alphabetically
+        childNodes = childNodes.sort((a, b) => {
+          return b.type.localeCompare(a.type) || a.title.localeCompare(b.title)
+        })
         return child.childNodes
       }, r)
       return r
     }, [])
+    // Sort by type, alphabetically
+    tree = tree.sort((a, b) => {
+      return b.type.localeCompare(a.type) || a.title.localeCompare(b.title)
+    })
     return tree
   }
   async function runHelper() {
@@ -257,8 +275,6 @@ def delete_folder(path):
   function createEmptyFile({ source, parentFolder }) {
     return createFile({
       fileName: generateFileName(),
-      parentFolder,
-      source,
       hasChanges: true
     })
   }
@@ -427,13 +443,31 @@ def delete_folder(path):
     emitter.emit('refresh-files')
     emitter.emit('render')
   })
+  emitter.on('toggle-folder', (path) => {
+    const index = state.openedFolders.indexOf(path)
+    if (index == -1) {
+      state.openedFolders.push(path)
+    } else {
+      state.openedFolders.splice(index, 1)
+    }
+    emitter.emit('render')
+  })
+
+  // FILE MANAGEMENT
   emitter.on('load-file', async (path) => {
     log('load-file', path)
     const out = await loadFile(path)
     const editorState = state.editingFile.editor.editor.state
-    const update = editorState.update({changes: {from: 0, to: editorState.doc.length, insert: out}})
+    const update = editorState.update({
+      changes: {
+        from: 0,
+        to: editorState.doc.length,
+        insert: out
+      }
+    })
     state.editingFile.editor.editor.update([update])
     state.editingFile.path = path
+    emitter.emit('render')
   })
   emitter.on('save', async () => {
     log('save')

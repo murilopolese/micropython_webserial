@@ -5,14 +5,18 @@ export function TreePanel(state, emit) {
     function openFile() {
       if (file.type == 'file') {
         emit('load-file', file.path)
+      } else if (file.type == 'folder') {
+        emit('toggle-folder', file.path)
       }
     }
     let icon = file.type == 'file' ? 'file' : 'folder'
+    let selectedClass = file.path == state.editingFile.path ? 'selected' : ''
+    let opened = state.openedFolders.indexOf(file.path) != -1
     if (file.childNodes.length) {
       return html`
-        <details class="item-wrapper" open>
+        <details class="item-wrapper" open=${opened}>
           <summary class="root">
-            <div class="item" onclick=${openFile}>
+            <div class="item ${selectedClass}" onclick=${openFile}>
               <img class="icon" src="media/${icon}.svg" />
               <div class="text">${file.title}</div>
             </div>
@@ -26,7 +30,7 @@ export function TreePanel(state, emit) {
       return html`
       <div class="item-wrapper">
         <div class="root">
-          <div class="item" onclick=${openFile}>
+          <div class="item  ${selectedClass}" onclick=${openFile}>
             <img class="icon" src="media/${icon}.svg" />
             <div class="text">${file.title}</div>
           </div>
