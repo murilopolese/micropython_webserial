@@ -24,6 +24,7 @@ export async function store(state, emitter) {
   state.isTerminalBound = false
   state.boardFiles = []
   state.isLoadingFiles = false
+  state.isSaving = false
 
   state.readingBuffer = ''
   state.readingUntil = null
@@ -442,9 +443,12 @@ def delete_folder(path):
   })
   emitter.on('save', async () => {
     log('save')
+    state.isSaving = true
+    emitter.emit('render')
     const code = state.editingFile.editor.editor.state.doc.toString()
     await saveFile(state.editingFile.path, code)
-
+    state.isSaving = false
+    emitter.emit('render')
   })
 
 
