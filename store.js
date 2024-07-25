@@ -224,22 +224,16 @@ def delete_folder(path):
     await exitRawRepl()
     return output.split('OK')[1].split('\x04')[0]
   }
-
   async function saveFile(path, content) {
     await getPrompt()
     await enterRawRepl()
-    await executeRaw(`f=open('${path}','w')\nw=f.write`)
-    for (let i = 0; i < content.length; i += 100) {
-      const c = content.slice(i, i+100)
-      await write(`w("""${c}""")`)
-      await sleep(10)
-      await write('\x04')
-      await readUntil('\x04>')
+    await executeRaw(`f=open('${path}','wb')\nw=f.write`)
+    for (let i = 0; i < content.length; i += 128) {
+      const c = content.slice(i, i+128)
+      const d = new TextEncoder().encode(c)
+      await executeRaw(`w(bytes([${d}]))`)
     }
-    await write(`f.close()`)
-    await sleep(10)
-    await write('\x04')
-    await readUntil('\x04>')
+    await executeRaw(`f.close()`)
     await exitRawRepl()
   }
 
