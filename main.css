@@ -538,6 +538,7 @@ button.small .icon {
   flex-direction: column;
   height: 100%;
   width: 100%;
+  border-left: solid 2px #DCE1E1; 
 }
 
 .item-wrapper {
