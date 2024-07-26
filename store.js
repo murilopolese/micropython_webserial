@@ -457,16 +457,10 @@ def delete_folder(path):
   emitter.on('load-file', async (path) => {
     log('load-file', path)
     const out = await loadFile(path)
-    const editorState = state.editingFile.editor.editor.state
-    const update = editorState.update({
-      changes: {
-        from: 0,
-        to: editorState.doc.length,
-        insert: out
-      }
+    state.editingFile = createFile({
+      path: path,
+      content: out
     })
-    state.editingFile.editor.editor.update([update])
-    state.editingFile.path = path
     emitter.emit('render')
   })
   emitter.on('save', async () => {
