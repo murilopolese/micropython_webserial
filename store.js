@@ -53,6 +53,7 @@ export async function store(state, emitter) {
   }
   state.editingFile = newFile
   state.openedFolders = []
+  state.selectedItem = null // path of selected item
 
   async function readForeverAndReport(cb) {
     try {
@@ -254,6 +255,19 @@ def delete_folder(path):
     await executeRaw(`f.close()`)
     await exitRawRepl()
   }
+  async function removeFile(path) {
+    if (path) {
+      await getPrompt()
+      await enterRawRepl()
+      let command = `import uos\n`
+          command += `try:\n`
+          command += `  uos.remove("${path}")\n`
+          command += `except OSError:\n`
+          command += `  print(0)\n`
+      await executeRaw(command)
+      await exitRawRepl()
+    }
+  }
 
   function createFile(args) {
     const {
@@ -272,7 +286,7 @@ def delete_folder(path):
     }
   }
 
-  function createEmptyFile({ source, parentFolder }) {
+  function createEmptyFile() {
     return createFile({
       fileName: generateFileName(),
       hasChanges: true
@@ -450,6 +464,7 @@ def delete_folder(path):
     } else {
       state.openedFolders.splice(index, 1)
     }
+    state.selectedItem = path
     emitter.emit('render')
   })
 
@@ -461,6 +476,7 @@ def delete_folder(path):
       path: path,
       content: out
     })
+    state.selectedItem = state.editingFile.path
     emitter.emit('render')
   })
   emitter.on('save', async () => {
@@ -470,9 +486,24 @@ def delete_folder(path):
     const code = state.editingFile.editor.editor.state.doc.toString()
     await saveFile(state.editingFile.path, code)
     state.isSaving = false
+    emitter.emit('refresh-files')
     emitter.emit('render')
   })
-
+  emitter.on('remove', async () => {
+    let selectedItem = state.boardFiles.find(f => f.path == state.selectedItem)
+    if (selectedItem.type == 'file') {
+      await removeFile(selectedItem.path)
+    } else {
+      await runHelper()
+      await enterRawRepl()
+      await executeRaw(`delete_folder('${selectedItem.path}')`)
+      await exitRawRepl()
+    }
+    state.selectedItem = null
+    state.editingFile = createEmptyFile()
+    emitter.emit('refresh-files')
+    emitter.emit('render')
+  })
 
 
 }

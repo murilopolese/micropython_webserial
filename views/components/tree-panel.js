@@ -10,8 +10,9 @@ export function TreePanel(state, emit) {
       }
     }
     let icon = file.type == 'file' ? 'file' : 'folder'
-    let selectedClass = file.path == state.editingFile.path ? 'selected' : ''
+    let selectedClass = file.path == state.selectedItem ? 'selected' : ''
     let opened = state.openedFolders.indexOf(file.path) != -1
+
     if (file.childNodes.length) {
       return html`
         <details class="item-wrapper" open=${opened}>
@@ -48,27 +49,34 @@ export function TreePanel(state, emit) {
       <div id="tree-options">
         ${Button({
           icon: `new-file.svg`,
-          size: 'small'
+          size: 'small',
+          disabled: true
         })}
         ${Button({
           icon: `new-folder.svg`,
-          size: 'small'
+          size: 'small',
+          disabled: true
         })}
         ${Button({
           icon: `delete.svg`,
-          size: 'small'
+          size: 'small',
+          disabled: state.selectedItem == null,
+          onClick: () => emit('remove')
         })}
         ${Button({
           icon: `cursor.svg`,
-          size: 'small'
+          size: 'small',
+          disabled: true
         })}
         ${Button({
           icon: `arrow-up.svg`,
-          size: 'small'
+          size: 'small',
+          disabled: true
         })}
         ${Button({
           icon: `arrow-down.svg`,
-          size: 'small'
+          size: 'small',
+          disabled: true
         })}
       </div>
     </div>
