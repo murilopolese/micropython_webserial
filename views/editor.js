@@ -11,7 +11,8 @@ export function EditorView(state, emit) {
       ${Toolbar(state, emit)}
       <div class="row">
         ${TreePanel(state, emit)}
-        <div class="column" style="${w}">
+        <div class="column" style="border-left: solid 2px #DCE1E1; ${w}">
+          <div id="file-header">${state.editingFile.path}</div>
           ${CodeEditor(state, emit)}
           ${ReplPanel(state, emit)}
         </div>

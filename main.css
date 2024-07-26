@@ -320,6 +320,15 @@ button.small .icon {
   position: relative;
 }
 
+#file-header {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 20px;
+  background: #ECF1F1;
+  height: 48px;
+}
+
 #panel {
   display: flex;
   flex-direction: column;
@@ -502,7 +511,9 @@ button.small .icon {
 }
 
 #tree-header {
-  width: 300px;
+  display: flex;
+  align-items: center;
+  width: 100%;
   padding: 10px;
   background: #ECF1F1;
   font-weight: bold;
@@ -538,7 +549,6 @@ button.small .icon {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  border-left: solid 2px #DCE1E1; 
 }
 
 .item-wrapper {
