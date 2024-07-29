@@ -40,44 +40,79 @@ export function TreePanel(state, emit) {
       `
     }
   }
+  let options = [
+    Button({
+      icon: `new-file.svg`,
+      size: 'small',
+      disabled: !state.isConnected,
+      onClick: () => emit('start-creating-file')
+    }),
+    Button({
+      icon: `new-folder.svg`,
+      size: 'small',
+      onClick: () => emit('start-creating-folder')
+    }),
+    Button({
+      icon: `delete.svg`,
+      size: 'small',
+      disabled: state.selectedItem == null,
+      onClick: () => emit('remove')
+    }),
+    // Button({
+    //   icon: `cursor.svg`,
+    //   size: 'small',
+    //   disabled: true
+    // }),
+    // Button({
+    //   icon: `arrow-up.svg`,
+    //   size: 'small',
+    //   disabled: true
+    // }),
+    // Button({
+    //   icon: `arrow-down.svg`,
+    //   size: 'small',
+    //   disabled: true
+    // })
+  ]
+
+  if (state.isCreatingFile) {
+    options = html`
+      <input type="text" value=${state.creatingFileAt} />
+      ${Button({
+        icon: `save.svg`,
+        size: 'small',
+        onClick: () => emit('finish-creating-file', document.querySelector('#tree-options input').value)
+      })}
+      ${Button({
+        icon: `close.svg`,
+        size: 'small',
+        onClick: () => emit('finish-creating-file', null)
+      })}
+    `
+  }
+  if (state.isCreatingFolder) {
+    options = html`
+      <input type="text" value=${state.creatingFileAt} />
+      ${Button({
+        icon: `save.svg`,
+        size: 'small',
+        onClick: () => emit('finish-creating-folder', document.querySelector('#tree-options input').value)
+      })}
+      ${Button({
+        icon: `close.svg`,
+        size: 'small',
+        onClick: () => emit('finish-creating-folder', null)
+      })}
+    `
+  }
+
   return html`
     <div id="tree-panel" class="column ${state.isTreePanelOpen ? 'open' : ''}">
-      <div id="tree-header">Nano ESP32 (/dev/ttyACM0)</div>
       <div id="tree-items">
         ${state.boardFiles.map(Item)}
       </div>
       <div id="tree-options">
-        ${Button({
-          icon: `new-file.svg`,
-          size: 'small',
-          disabled: true
-        })}
-        ${Button({
-          icon: `new-folder.svg`,
-          size: 'small',
-          disabled: true
-        })}
-        ${Button({
-          icon: `delete.svg`,
-          size: 'small',
-          disabled: state.selectedItem == null,
-          onClick: () => emit('remove')
-        })}
-        ${Button({
-          icon: `cursor.svg`,
-          size: 'small',
-          disabled: true
-        })}
-        ${Button({
-          icon: `arrow-up.svg`,
-          size: 'small',
-          disabled: true
-        })}
-        ${Button({
-          icon: `arrow-down.svg`,
-          size: 'small',
-          disabled: true
-        })}
+        ${options}
       </div>
     </div>
   `

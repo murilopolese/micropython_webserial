@@ -12,7 +12,7 @@ export function EditorView(state, emit) {
       <div class="row">
         ${TreePanel(state, emit)}
         <div class="column" style="border-left: solid 2px #DCE1E1; ${w}">
-          <div id="file-header">${state.editingFile.path}</div>
+          <div id="file-header">${state.editingFile.path} ${state.editingFile.hasChanges ? '*' : ''}</div>
           ${CodeEditor(state, emit)}
           ${ReplPanel(state, emit)}
         </div>

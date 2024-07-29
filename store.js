@@ -8,6 +8,39 @@ let reader
 let writer
 
 const newFileContent = ``
+const HELPER_CODE = `import os
+import json
+os.chdir('/')
+def is_directory(path):
+  return True if os.stat(path)[0] == 0x4000 else False
+
+def get_all_files(path, array_of_files = []):
+  files = os.ilistdir(path)
+  for file in files:
+    is_folder = file[1] == 16384
+    p = path + '/' + file[0]
+    array_of_files.append({
+        "path": p,
+        "type": "folder" if is_folder else "file"
+    })
+    if is_folder:
+        array_of_files = get_all_files(p, array_of_files)
+  return array_of_files
+
+
+def ilist_all(path):
+  print(json.dumps(get_all_files(path)))
+
+def delete_folder(path):
+  files = get_all_files(path)
+  for file in files:
+    if file['type'] == 'file':
+        os.remove(file['path'])
+  for file in reversed(files):
+    if file['type'] == 'folder':
+        os.rmdir(file['path'])
+  os.rmdir(path)
+`
 
 function sleep(millis) {
   return new Promise((resolve, reject) => {
@@ -25,6 +58,9 @@ export async function store(state, emitter) {
   state.boardFiles = []
   state.isLoadingFiles = false
   state.isSaving = false
+  state.isRemoving = false
+  state.isCreatingFile = false
+  state.isCreatingFolder = false
 
   state.readingBuffer = ''
   state.readingUntil = null
@@ -43,17 +79,37 @@ export async function store(state, emitter) {
     emitter.emit('render')
   }
 
-  const newFile = createEmptyFile({
-    parentFolder: null, // Null parent folder means not saved?
-    source: 'disk'
-  })
+  const newFile = createEmptyFile()
   newFile.editor.onChange = function() {
-    newFile.hasChanges = true
+    state.editingFile.hasChanges = true
     emitter.emit('render')
   }
   state.editingFile = newFile
   state.openedFolders = []
-  state.selectedItem = null // path of selected item
+  state.selectedItem = null // path of selected item (file or folder)
+
+  function createFile(args) {
+    const {
+      path,
+      content = newFileContent,
+      hasChanges = false
+    } = args
+    const id = generateHash()
+    const editor = state.cache(CodeMirrorEditor, `editor_${id}`)
+    editor.content = content
+    return {
+      id,
+      path,
+      editor,
+      hasChanges
+    }
+  }
+  function createEmptyFile() {
+    return createFile({
+      path: '/' + generateFileName(),
+      hasChanges: true
+    })
+  }
 
   async function readForeverAndReport(cb) {
     try {
@@ -75,13 +131,13 @@ export async function store(state, emitter) {
   async function connect() {
     return new Promise((resolve, reject) => {
       navigator.serial.requestPort()
-      .then(async (port) => {
-        await port.open({ baudRate: 115200 })
-        reader = port.readable.getReader()
-        writer = port.writable.getWriter()
-        resolve(port)
-      })
-      .catch(reject)
+        .then(async (port) => {
+          await port.open({ baudRate: 115200 })
+          reader = port.readable.getReader()
+          writer = port.writable.getWriter()
+          resolve(port)
+        })
+      . catch(reject)
     })
   }
   async function disconnect() {
@@ -99,6 +155,25 @@ export async function store(state, emitter) {
     const uint8Array = textEncoder.encode(str)
     await writer.write(uint8Array)
   }
+  async function readUntil(token) {
+    if (state.readingUntil) {
+      // Already reading until
+      console.log('already running read until')
+      return Promise.reject()
+    }
+    // Those variables are going to be referenced on emitter.on('data')
+    state.readingUntil = token
+    state.readingBuffer = ''
+    return new Promise((resolve, reject) => {
+      // Those functions are going to be called on emitter.on('data')
+      state.resolveReadingUntilPromise = (result) => {
+        state.readingUntil = null
+        state.readingBuffer = ''
+        resolve(result)
+      }
+    })
+  }
+
   // also known as stop
   async function getPrompt() {
     write('\x03\x02')
@@ -134,29 +209,16 @@ export async function store(state, emitter) {
     return await readUntil('\x04>')
   }
 
-  async function readUntil(token) {
-    if (state.readingUntil) {
-      // Already reading until
-      console.log('already running read until')
-      return Promise.reject()
-    }
-    // Those variables are going to be referenced on emitter.on('data')
-    state.readingUntil = token
-    state.readingBuffer = ''
-    return new Promise((resolve, reject) => {
-      // Those functions are going to be called on emitter.on('data')
-      state.resolveReadingUntilPromise = (result) => {
-        state.readingUntil = null
-        state.readingBuffer = ''
-        resolve(result)
-      }
-    })
+  async function runHelper() {
+    await getPrompt()
+    await enterRawRepl()
+    const out = await executeRaw(HELPER_CODE)
+    await exitRawRepl()
+    return out
   }
 
   async function getBoardFiles(path) {
     await runHelper()
-
-    // await getPrompt()
     await enterRawRepl()
     let out = await executeRaw(`print(json.dumps(get_all_files("")))`)
     await exitRawRepl()
@@ -193,47 +255,6 @@ export async function store(state, emitter) {
     })
     return tree
   }
-  async function runHelper() {
-    const code = `import os
-import json
-os.chdir('/')
-def is_directory(path):
-  return True if os.stat(path)[0] == 0x4000 else False
-
-def get_all_files(path, array_of_files = []):
-    files = os.ilistdir(path)
-    for file in files:
-        is_folder = file[1] == 16384
-        p = path + '/' + file[0]
-        array_of_files.append({
-            "path": p,
-            "type": "folder" if is_folder else "file"
-        })
-        if is_folder:
-            array_of_files = get_all_files(p, array_of_files)
-    return array_of_files
-
-
-def ilist_all(path):
-    print(json.dumps(get_all_files(path)))
-
-def delete_folder(path):
-    files = get_all_files(path)
-    for file in files:
-        if file['type'] == 'file':
-            os.remove(file['path'])
-    for file in reversed(files):
-        if file['type'] == 'folder':
-            os.rmdir(file['path'])
-    os.rmdir(path)
-  `
-    await getPrompt()
-    await enterRawRepl()
-    const out = await executeRaw(code)
-    await exitRawRepl()
-    return out
-  }
-
   async function loadFile(path) {
     await getPrompt()
     await enterRawRepl()
@@ -256,42 +277,24 @@ def delete_folder(path):
     await exitRawRepl()
   }
   async function removeFile(path) {
-    if (path) {
-      await getPrompt()
-      await enterRawRepl()
-      let command = `import uos\n`
-          command += `try:\n`
-          command += `  uos.remove("${path}")\n`
-          command += `except OSError:\n`
-          command += `  print(0)\n`
-      await executeRaw(command)
-      await exitRawRepl()
-    }
+    await getPrompt()
+    await enterRawRepl()
+    let command = `import uos\n`
+        command += `try:\n`
+        command += `  uos.remove("${path}")\n`
+        command += `except OSError:\n`
+        command += `  print(0)\n`
+    await executeRaw(command)
+    await exitRawRepl()
+  }
+  async function createDiskFile(path) {
+    await getPrompt()
+    await enterRawRepl()
+    let command = `f=open('${path}', 'w');f.close()`
+    await executeRaw(command)
+    await exitRawRepl()
   }
 
-  function createFile(args) {
-    const {
-      path,
-      content = newFileContent,
-      hasChanges = false
-    } = args
-    const id = generateHash()
-    const editor = state.cache(CodeMirrorEditor, `editor_${id}`)
-    editor.content = content
-    return {
-      id,
-      path,
-      editor,
-      hasChanges
-    }
-  }
-
-  function createEmptyFile() {
-    return createFile({
-      fileName: generateFileName(),
-      hasChanges: true
-    })
-  }
 
   // START AND BASIC ROUTING
   emitter.on('connect', async() => {
@@ -302,6 +305,7 @@ def delete_folder(path):
 
     try {
       port = await connect()
+      state.port = port
       state.isConnected = true
 
       if (state.panelHeight <= PANEL_CLOSED) {
@@ -449,6 +453,17 @@ def delete_folder(path):
       state.boardFiles = []
     }
 
+    state.boardFilesMap = {}
+    function recurse(files) {
+      for (let i = 0; i < files.length; i++) {
+        let f = files[i]
+        state.boardFilesMap[f.path] = f
+        if (f.type == 'folder') recurse(f.childNodes)
+      }
+
+    }
+    recurse(state.boardFiles)
+
     state.isLoadingFiles = false
     emitter.emit('render')
   })
@@ -476,6 +491,10 @@ def delete_folder(path):
       path: path,
       content: out
     })
+    state.editingFile.editor.onChange = function() {
+      state.editingFile.hasChanges = true
+      emitter.emit('render')
+    }
     state.selectedItem = state.editingFile.path
     emitter.emit('render')
   })
@@ -486,25 +505,57 @@ def delete_folder(path):
     const code = state.editingFile.editor.editor.state.doc.toString()
     await saveFile(state.editingFile.path, code)
     state.isSaving = false
+    state.selectedItem = state.editingFile.path
     emitter.emit('refresh-files')
     emitter.emit('render')
   })
   emitter.on('remove', async () => {
-    let selectedItem = state.boardFiles.find(f => f.path == state.selectedItem)
+    state.isRemoving = true
+    emitter.emit('render')
+
+    let selectedItem = state.boardFilesMap[state.selectedItem]
+
     if (selectedItem.type == 'file') {
       await removeFile(selectedItem.path)
+      state.editingFile = createEmptyFile()
+      state.selectedItem = null
     } else {
       await runHelper()
       await enterRawRepl()
       await executeRaw(`delete_folder('${selectedItem.path}')`)
       await exitRawRepl()
+      const i = state.openedFolders.indexOf(selectedItem.path)
+      state.openedFolders.splice(i, 1)
     }
-    state.selectedItem = null
-    state.editingFile = createEmptyFile()
+    state.isRemoving = false
     emitter.emit('refresh-files')
     emitter.emit('render')
   })
 
+  emitter.on('start-creating-file', () => {
+    log('start-creating-file')
+    state.isCreatingFile = true
+    if (state.selectedItem == null) {
+      state.creatingFileAt = '/'
+    }
+    if (state.selectedItem == state.editingFile.path) {
+      state.creatingFileAt = state.selectedItem.split('/').slice(0, -1).join('/') + '/'
+    } else if (state.selectedItem) {
+      state.creatingFileAt = state.selectedItem + '/'
+    }
+    emitter.emit('render')
+  })
+  emitter.on('finish-creating-file', async (value) => {
+    log('finish-creating-file', value)
+    if (value != null) {
+      await createDiskFile(value)
+      state.editingFile = createFile({ path: value })
+      state.selectedItem = value
+    }
+    state.isCreatingFile = false
+    emitter.emit('refresh-files')
+    emitter.emit('render')
+  })
 
 }
 

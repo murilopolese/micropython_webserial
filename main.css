@@ -510,20 +510,10 @@ button.small .icon {
   min-width: 300px;
 }
 
-#tree-header {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 10px;
-  background: #ECF1F1;
-  font-weight: bold;
-  height: 48px;
-}
-
 #tree-items {
   width: 300px;
   padding: 10px;
-  height: calc(100vh - 185px);
+  height: calc(100vh - 137px);
   overflow-y: scroll;
   overflow-x: hidden;
 }
@@ -536,6 +526,12 @@ button.small .icon {
   flex-direction: row;
   gap: 10px;
   height: 48px;
+}
+
+#tree-options input {
+  width: 100%;
+  border: none;
+  font-family: inherit;
 }
 
 .row {
