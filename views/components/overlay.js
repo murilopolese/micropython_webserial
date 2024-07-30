@@ -5,7 +5,7 @@ export function Overlay(state, emit) {
   if (state.isConnecting) overlay = html`<div id="overlay" class="open"><p>Connecting...</p></div>`
   if (state.isLoadingFiles) overlay = html`<div id="overlay" class="open"><p>Loading files...</p></div>`
   if (state.isSaving) overlay = html`<div id="overlay" class="open"><p>Saving file...</p></div>`
-  if (state.isTransferring) overlay = html`<div id="overlay" class="open"><p>Transferring file... ${state.transferringProgress}</p></div>`
+  if (state.isUploading) overlay = html`<div id="overlay" class="open"><p>Uploading file...</p></div>`
 
   return overlay
 }

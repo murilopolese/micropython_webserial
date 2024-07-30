@@ -200,8 +200,9 @@ export async function store(state, emitter) {
     await readUntil('>>>')
   }
   async function executeRaw(code) {
-    for (let i = 0; i < code.length; i += 128) {
-      const c = code.slice(i, i+128)
+    const S = 128
+    for (let i = 0; i < code.length; i += S) {
+      const c = code.slice(i, i+S)
       await write(c)
       await sleep(10)
     }
@@ -548,6 +549,10 @@ export async function store(state, emitter) {
       await exitRawRepl()
       const i = state.openedFolders.indexOf(selectedItem.path)
       state.openedFolders.splice(i, 1)
+      if (state.editingFile.path.indexOf(selectedItem.path) == 0) {
+        state.editingFile = createEmptyFile()
+        state.selectedItem = null
+      }
     }
     state.isRemoving = false
     emitter.emit('refresh-files')
@@ -617,6 +622,42 @@ export async function store(state, emitter) {
     emitter.emit('render')
   })
 
+  emitter.on('upload-file', async (items) => {
+    log('upload-files', items)
+    if (items.length > 0) {
+      const item = items[0]
+      const file = item.getAsFile()
+      if (file.type != 'text/x-python') return
+      state.isUploading = true
+      emitter.emit('render')
+      const reader = new FileReader()
+      reader.addEventListener('load', async () => {
+        let content = reader.result
+        let parentFolder = ''
+        if (state.selectedItem != null) {
+          const treeItem = state.boardFilesMap[state.selectedItem]
+          if (treeItem == undefined) {
+            // Defaults to ''
+          } else if (treeItem.type == 'folder') {
+            parentFolder = state.selectedItem
+          } else if (treeItem.type == 'file') {
+            parentFolder = state.selectedItem.split('/').slice(0, -1).join('/')
+          }
+        }
+        let newFile = createFile({
+          path: parentFolder + '/' + file.name,
+          content: content
+        })
+        await saveFile(newFile.path, newFile.editor.content)
+        state.editingFile = newFile
+        state.selectedItem = newFile.path
+        state.isUploading = false
+        emitter.emit('refresh-files')
+        emitter.emit('render')
+      })
+      reader.readAsText(file)
+    }
+  })
 
 }
 
