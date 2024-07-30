@@ -61,7 +61,8 @@ export function TreePanel(state, emit) {
     Button({
       icon: `cursor.svg`,
       size: 'small',
-      disabled: true
+      disabled: state.selectedItem == null,
+      onClick: () => emit('start-renaming-item')
     })
   ]
 
@@ -92,6 +93,21 @@ export function TreePanel(state, emit) {
         icon: `close.svg`,
         size: 'small',
         onClick: () => emit('finish-creating-folder', null)
+      })}
+    `
+  }
+  if (state.isRenamingItem) {
+    options = html`
+      <input type="text" value=${state.selectedItem} />
+      ${Button({
+        icon: `save.svg`,
+        size: 'small',
+        onClick: () => emit('finish-renaming-item', document.querySelector('#tree-options input').value)
+      })}
+      ${Button({
+        icon: `close.svg`,
+        size: 'small',
+        onClick: () => emit('finish-renaming-item', null)
       })}
     `
   }

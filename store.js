@@ -603,6 +603,20 @@ export async function store(state, emitter) {
     emitter.emit('render')
   })
 
+  emitter.on('start-renaming-item', () => {
+    log('start-renaming-item')
+    state.isRenamingItem = true
+    emitter.emit('render')
+  })
+  emitter.on('finish-renaming-item', async (value) => {
+    log('finish-renaming-item', value)
+    await renameItem(state.selectedItem, value)
+    state.selectedItem = value
+    state.isRenamingItem = false
+    emitter.emit('refresh-files')
+    emitter.emit('render')
+  })
+
 
 }
 
