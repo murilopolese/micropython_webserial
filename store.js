@@ -107,7 +107,7 @@ export async function store(state, emitter) {
   function createEmptyFile() {
     return createFile({
       path: '/' + generateFileName(),
-      hasChanges: true
+      hasChanges: false
     })
   }
 
@@ -287,10 +287,24 @@ export async function store(state, emitter) {
     await executeRaw(command)
     await exitRawRepl()
   }
-  async function createDiskFile(path) {
+  async function createBoardFile(path) {
     await getPrompt()
     await enterRawRepl()
     let command = `f=open('${path}', 'w');f.close()`
+    await executeRaw(command)
+    await exitRawRepl()
+  }
+  async function createBoardFolder(path) {
+    await getPrompt()
+    await enterRawRepl()
+    let command = `import os;os.mkdir('${path}')`
+    await executeRaw(command)
+    await exitRawRepl()
+  }
+  async function renameItem(srcPath, destPath) {
+    await getPrompt()
+    await enterRawRepl()
+    let command = `import os;os.rename('${srcPath}','${destPath}')`
     await executeRaw(command)
     await exitRawRepl()
   }
@@ -486,6 +500,10 @@ export async function store(state, emitter) {
   // FILE MANAGEMENT
   emitter.on('load-file', async (path) => {
     log('load-file', path)
+    if (state.editingFile.hasChanges) {
+      const response = confirm('Your file has unsaved changes. Are you sure you want to proceed?')
+      if (!response) return false
+    }
     const out = await loadFile(path)
     state.editingFile = createFile({
       path: path,
@@ -506,10 +524,14 @@ export async function store(state, emitter) {
     await saveFile(state.editingFile.path, code)
     state.isSaving = false
     state.selectedItem = state.editingFile.path
+    state.editingFile.hasChanges = false
     emitter.emit('refresh-files')
     emitter.emit('render')
   })
   emitter.on('remove', async () => {
+    const response = confirm('You are about to delete this item. Are you sure you want to proceed?')
+    if (!response) return false
+
     state.isRemoving = true
     emitter.emit('render')
 
@@ -536,19 +558,19 @@ export async function store(state, emitter) {
     log('start-creating-file')
     state.isCreatingFile = true
     if (state.selectedItem == null) {
-      state.creatingFileAt = '/'
+      state.creatingItemAt = '/'
     }
     if (state.selectedItem == state.editingFile.path) {
-      state.creatingFileAt = state.selectedItem.split('/').slice(0, -1).join('/') + '/'
+      state.creatingItemAt = state.selectedItem.split('/').slice(0, -1).join('/') + '/'
     } else if (state.selectedItem) {
-      state.creatingFileAt = state.selectedItem + '/'
+      state.creatingItemAt = state.selectedItem + '/'
     }
     emitter.emit('render')
   })
   emitter.on('finish-creating-file', async (value) => {
     log('finish-creating-file', value)
     if (value != null) {
-      await createDiskFile(value)
+      await createBoardFile(value)
       state.editingFile = createFile({ path: value })
       state.selectedItem = value
     }
@@ -556,6 +578,31 @@ export async function store(state, emitter) {
     emitter.emit('refresh-files')
     emitter.emit('render')
   })
+
+  emitter.on('start-creating-folder', () => {
+    log('start-creating-folder')
+    state.isCreatingFolder = true
+    if (state.selectedItem == null) {
+      state.creatingItemAt = '/'
+    }
+    if (state.selectedItem == state.editingFile.path) {
+      state.creatingItemAt = state.selectedItem.split('/').slice(0, -1).join('/') + '/'
+    } else if (state.selectedItem) {
+      state.creatingItemAt = state.selectedItem + '/'
+    }
+    emitter.emit('render')
+  })
+  emitter.on('finish-creating-folder', async (value) => {
+    log('finish-creating-folder', value)
+    if (value != null) {
+      await createBoardFolder(value)
+      state.selectedItem = value
+    }
+    state.isCreatingFolder = false
+    emitter.emit('refresh-files')
+    emitter.emit('render')
+  })
+
 
 }
 

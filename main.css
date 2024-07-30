@@ -576,6 +576,9 @@ button.small .icon {
   width: 100%;
 }
 
+#tree-items *:focus {  
+  outline: none;
+}
 summary {
   list-style-type: '';
 }

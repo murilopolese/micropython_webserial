@@ -58,26 +58,16 @@ export function TreePanel(state, emit) {
       disabled: state.selectedItem == null,
       onClick: () => emit('remove')
     }),
-    // Button({
-    //   icon: `cursor.svg`,
-    //   size: 'small',
-    //   disabled: true
-    // }),
-    // Button({
-    //   icon: `arrow-up.svg`,
-    //   size: 'small',
-    //   disabled: true
-    // }),
-    // Button({
-    //   icon: `arrow-down.svg`,
-    //   size: 'small',
-    //   disabled: true
-    // })
+    Button({
+      icon: `cursor.svg`,
+      size: 'small',
+      disabled: true
+    })
   ]
 
   if (state.isCreatingFile) {
     options = html`
-      <input type="text" value=${state.creatingFileAt} />
+      <input type="text" value=${state.creatingItemAt} />
       ${Button({
         icon: `save.svg`,
         size: 'small',
@@ -92,7 +82,7 @@ export function TreePanel(state, emit) {
   }
   if (state.isCreatingFolder) {
     options = html`
-      <input type="text" value=${state.creatingFileAt} />
+      <input type="text" value=${state.creatingItemAt} />
       ${Button({
         icon: `save.svg`,
         size: 'small',
