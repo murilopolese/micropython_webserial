@@ -40,6 +40,9 @@ export function TreePanel(state, emit) {
       `
     }
   }
+  const canDownload = state.selectedItem
+    && state.boardFilesMap[state.selectedItem]
+    && state.boardFilesMap[state.selectedItem].type === 'file'
   let options = [
     Button({
       icon: `new-file.svg`,
@@ -69,6 +72,12 @@ export function TreePanel(state, emit) {
       size: 'small',
       disabled: !state.isConnected,
       onClick: () => emit('upload-file')
+    }),
+    Button({
+      icon: `arrow-down.svg`,
+      size: 'small',
+      disabled: !canDownload,
+      onClick: () => emit('download-file')
     }),
   ]
 

@@ -1,7 +1,8 @@
+window.requestFileSystem = window.requestFileSystem || window.webkitRequestFileSystem
+const log = console.log
+
 import { CodeMirrorEditor } from './views/components/elements/editor.js'
 import { XTerm } from './views/components/elements/terminal.js'
-
-const log = console.log
 
 let port
 let reader
@@ -687,6 +688,14 @@ export async function store(state, emitter) {
       })
       reader.readAsText(file)
     }
+  })
+  emitter.on('download-file', async () => {
+    log('download-file')
+    const blob = new Blob(
+      [state.editingFile.editor.content],
+      {type: "text/x-python;charset=utf-8"}
+    );
+    saveAs(blob, state.boardFilesMap[state.editingFile.path].title);
   })
 
 }

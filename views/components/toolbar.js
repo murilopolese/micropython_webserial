@@ -51,25 +51,3 @@ export function Toolbar(state, emit) {
     </div>
   `
 }
-
-// <div class="separator"></div>
-//
-// ${Button({
-//   icon: 'save.svg',
-//   tooltip: 'Save',
-//   disabled: !_canSave,
-//   onClick: () => emit('save')
-// })}
-// <div class="separator"></div>
-// ${Button({
-//   icon: 'console.svg',
-//   tooltip: 'Editor and REPL',
-//   active: state.view === 'editor',
-//   onClick: () => emit('change-view', 'editor')
-// })}
-// ${Button({
-//   icon: 'files.svg',
-//   tooltip: 'File Manager',
-//   active: state.view === 'file-manager',
-//   onClick: () => emit('change-view', 'file-manager')
-// })}
