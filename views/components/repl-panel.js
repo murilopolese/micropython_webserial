@@ -4,9 +4,9 @@ import { XTerm } from './elements/terminal.js'
 export function ReplPanel(state, emit) {
   const onToggle = () => {
     if (state.panelHeight > PANEL_CLOSED) {
-      emit('close-panel')
+      emit('close-terminal-panel')
     } else {
-      emit('open-panel')
+      emit('open-terminal-panel')
     }
   }
   const panelOpenClass = state.isPanelOpen ? 'open' : 'closed'
@@ -17,8 +17,8 @@ export function ReplPanel(state, emit) {
     <div id="panel" style="height: ${state.panelHeight}px">
       <div id="panel-bar">
         <div id="drag-handle"
-          onmousedown=${() => emit('start-resizing-panel')}
-          onmouseup=${() => emit('stop-resizing-panel')}
+          onmousedown=${() => emit('start-resizing-terminal-panel')}
+          onmouseup=${() => emit('finish-resizing-terminal-panel')}
           ></div>
         <div id="term-operations" class="${termOperationsVisibility}">
           ${ReplOperations(state, emit)}

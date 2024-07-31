@@ -158,8 +158,7 @@ export async function store(state, emitter) {
   async function readUntil(token) {
     if (state.readingUntil) {
       // Already reading until
-      console.log('already running read until')
-      return Promise.reject()
+      return Promise.reject(new Error('Already running "read until"'))
     }
     // Those variables are going to be referenced on emitter.on('data')
     state.readingUntil = token
@@ -169,13 +168,23 @@ export async function store(state, emitter) {
       state.resolveReadingUntilPromise = (result) => {
         state.readingUntil = null
         state.readingBuffer = ''
+        state.resolveReadingUntilPromise = () => false
+        state.rejectReadingUntilPromise = () => false
         resolve(result)
+      }
+      state.rejectReadingUntilPromise = (msg) => {
+        state.readingUntil = null
+        state.readingBuffer = ''
+        state.resolveReadingUntilPromise = () => false
+        state.rejectReadingUntilPromise = () => false
+        reject(new Error(msg))
       }
     })
   }
 
   // also known as stop
   async function getPrompt() {
+    state.rejectReadingUntilPromise('Interrupt execution to get prompt')
     write('\x03\x02')
     await readUntil('>>>')
   }
@@ -311,7 +320,7 @@ export async function store(state, emitter) {
   }
 
 
-  // START AND BASIC ROUTING
+  // CONNECTION
   emitter.on('connect', async() => {
     log('connect')
     emitter.emit('disconnect')
@@ -323,10 +332,11 @@ export async function store(state, emitter) {
       state.port = port
       state.isConnected = true
 
+      // Toggle panel accordingly
       if (state.panelHeight <= PANEL_CLOSED) {
         state.panelHeight = state.savedPanelHeight
       }
-
+      // Prompt board to print it's init message
       write('\x02')
       // Bind terminal
       let term = state.cache(XTerm, 'terminal').term
@@ -337,11 +347,12 @@ export async function store(state, emitter) {
           term.scrollToBottom()
         })
       }
-      async function report(a) {
-        term.write(a)
-        emitter.emit('data', a)
-      }
-      readForeverAndReport(report)
+      // Report data from the serial to the terminal and "data" event
+      readForeverAndReport((data) => {
+        term.write(data)
+        emitter.emit('data', data)
+
+      })
       navigator.serial.addEventListener("disconnect", (event) => {
         emitter.emit('disconnect')
       });
@@ -352,11 +363,13 @@ export async function store(state, emitter) {
 
     state.isConnecting = false
     emitter.emit('render')
+
+    // Delay the rendering a little bit
     setTimeout(() => {
       if (state.isConnected) {
         state.isTreePanelOpen = true
         emitter.emit('refresh-files')
-        emitter.emit('open-panel')
+        emitter.emit('open-terminal-panel')
       }
     }, 100)
   })
@@ -376,7 +389,7 @@ export async function store(state, emitter) {
     log('run')
     await getPrompt()
     const code = state.editingFile.editor.editor.state.doc.toString()
-    emitter.emit('open-panel')
+    emitter.emit('open-terminal-panel')
     emitter.emit('render')
     try {
       await enterRawRepl()
@@ -394,21 +407,22 @@ export async function store(state, emitter) {
   })
   emitter.on('stop', async () => {
     log('stop')
-    emitter.emit('open-panel')
+    emitter.emit('open-terminal-panel')
     emitter.emit('render')
     await getPrompt()
     log('stopped')
   })
   emitter.on('reset', async () => {
     log('reset')
-    emitter.emit('open-panel')
+    emitter.emit('open-terminal-panel')
     await getPrompt()
     await reset()
-    emitter.emit('open-panel')
+    emitter.emit('open-terminal-panel')
     emitter.emit('render')
     log('reseted')
   })
 
+  // HANDLING DATA FROM SERIAL
   emitter.on('data', (buff) => {
     const decoder = new TextDecoder()
     const data = decoder.decode(buff)
@@ -425,16 +439,16 @@ export async function store(state, emitter) {
   })
 
   // PANEL
-  emitter.on('open-panel', () => {
-    emitter.emit('stop-resizing-panel')
+  emitter.on('open-terminal-panel', () => {
+    emitter.emit('finish-resizing-terminal-panel')
     state.panelHeight = state.savedPanelHeight
     emitter.emit('render')
     setTimeout(() => {
       state.cache(XTerm, 'terminal').resizeTerm()
     }, 200)
   })
-  emitter.on('close-panel', () => {
-    emitter.emit('stop-resizing-panel')
+  emitter.on('close-terminal-panel', () => {
+    emitter.emit('finish-resizing-terminal-panel')
     state.savedPanelHeight = state.panelHeight
     state.panelHeight = 0
     emitter.emit('render')
@@ -442,16 +456,16 @@ export async function store(state, emitter) {
   emitter.on('clear-terminal', () => {
     state.cache(XTerm, 'terminal').term.clear()
   })
-  emitter.on('start-resizing-panel', () => {
-    log('start-resizing-panel')
+  emitter.on('start-resizing-terminal-panel', () => {
+    log('start-resizing-terminal-panel')
     window.addEventListener('mousemove', state.resizePanel)
     // Stop resizing when mouse leaves window or enters the tabs area
     document.body.addEventListener('mouseleave', () => {
-      emitter.emit('stop-resizing-panel')
+      emitter.emit('finish-resizing-terminal-panel')
     }, { once: true })
   })
-  emitter.on('stop-resizing-panel', () => {
-    log('stop-resizing-panel')
+  emitter.on('finish-resizing-terminal-panel', () => {
+    log('finish-resizing-terminal-panel')
     window.removeEventListener('mousemove', state.resizePanel)
   })
 
@@ -538,6 +552,7 @@ export async function store(state, emitter) {
 
     let selectedItem = state.boardFilesMap[state.selectedItem]
 
+    await getPrompt()
     if (selectedItem.type == 'file') {
       await removeFile(selectedItem.path)
       state.editingFile = createEmptyFile()
@@ -622,41 +637,51 @@ export async function store(state, emitter) {
     emitter.emit('render')
   })
 
-  emitter.on('upload-file', async (items) => {
-    log('upload-files', items)
-    if (items.length > 0) {
-      const item = items[0]
-      const file = item.getAsFile()
-      if (file.type != 'text/x-python') return
-      state.isUploading = true
-      emitter.emit('render')
-      const reader = new FileReader()
-      reader.addEventListener('load', async () => {
-        let content = reader.result
-        let parentFolder = ''
-        if (state.selectedItem != null) {
-          const treeItem = state.boardFilesMap[state.selectedItem]
-          if (treeItem == undefined) {
-            // Defaults to ''
-          } else if (treeItem.type == 'folder') {
-            parentFolder = state.selectedItem
-          } else if (treeItem.type == 'file') {
-            parentFolder = state.selectedItem.split('/').slice(0, -1).join('/')
-          }
-        }
-        let newFile = createFile({
-          path: parentFolder + '/' + file.name,
-          content: content
-        })
-        await saveFile(newFile.path, newFile.editor.content)
-        state.editingFile = newFile
-        state.selectedItem = newFile.path
-        state.isUploading = false
-        emitter.emit('refresh-files')
-        emitter.emit('render')
-      })
-      reader.readAsText(file)
+  emitter.on('upload-file', async (e) => {
+    log('upload-files', e)
+    let file = null
+    if (e.dataTransfer.items) {
+      const items = e.dataTransfer.items
+      if (items.length > 0) {
+        const item = items[0]
+        file = item.getAsFile()
+
+      }
+    } else {
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        file = e.dataTransfer.files[0]
+      }
     }
+    if (file == null) return
+    if (file.type != 'text/x-python') return
+    state.isUploading = true
+    emitter.emit('render')
+    const reader = new FileReader()
+    reader.addEventListener('load', async () => {
+      let content = reader.result
+      let parentFolder = ''
+      if (state.selectedItem != null) {
+        const treeItem = state.boardFilesMap[state.selectedItem]
+        if (treeItem == undefined) {
+          // Defaults to ''
+        } else if (treeItem.type == 'folder') {
+          parentFolder = state.selectedItem
+        } else if (treeItem.type == 'file') {
+          parentFolder = state.selectedItem.split('/').slice(0, -1).join('/')
+        }
+      }
+      let newFile = createFile({
+        path: parentFolder + '/' + file.name,
+        content: content
+      })
+      await saveFile(newFile.path, newFile.editor.content)
+      state.editingFile = newFile
+      state.selectedItem = newFile.path
+      state.isUploading = false
+      emitter.emit('refresh-files')
+      emitter.emit('render')
+    })
+    reader.readAsText(file)
   })
 
 }

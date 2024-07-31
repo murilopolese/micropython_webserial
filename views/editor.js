@@ -4,15 +4,12 @@ import { ReplPanel } from './components/repl-panel.js'
 import { TreePanel } from './components/tree-panel.js'
 
 export function EditorView(state, emit) {
-  function onDrop(ev) {
-    // Prevent default behavior (Prevent file from being opened)
-    ev.preventDefault()
-    emit('upload-file', ev.dataTransfer.items)
+  function onDrop(e) {
+    e.preventDefault()
+    emit('upload-file', e)
   }
-
-  function onDragOver(ev) {
-    // Prevent default behavior (Prevent file from being opened)
-    ev.preventDefault()
+  function onDragOver(e) {
+    e.preventDefault()
   }
   // TODO: solve this with css
   const w = state.isTreePanelOpen ? 'width: calc(100% - 300px)' : ''
