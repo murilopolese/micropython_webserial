@@ -64,8 +64,8 @@ export async function store(state, emitter) {
 
   state.readingBuffer = ''
   state.readingUntil = null
-  state.resolveReadingUntilPromise = () => Promise.resolve()
-  state.rejectReadingUntilPromise = () => Promise.reject()
+  state.resolveReadingUntilPromise = () => false
+  state.rejectReadingUntilPromise = () => false
 
   state.savedPanelHeight = PANEL_DEFAULT
   state.panelHeight = PANEL_CLOSED
@@ -637,51 +637,56 @@ export async function store(state, emitter) {
     emitter.emit('render')
   })
 
-  emitter.on('upload-file', async (e) => {
-    log('upload-files', e)
-    let file = null
-    if (e.dataTransfer.items) {
-      const items = e.dataTransfer.items
-      if (items.length > 0) {
-        const item = items[0]
-        file = item.getAsFile()
-
-      }
-    } else {
-      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        file = e.dataTransfer.files[0]
-      }
-    }
-    if (file == null) return
-    if (file.type != 'text/x-python') return
-    state.isUploading = true
-    emitter.emit('render')
-    const reader = new FileReader()
-    reader.addEventListener('load', async () => {
-      let content = reader.result
-      let parentFolder = ''
-      if (state.selectedItem != null) {
-        const treeItem = state.boardFilesMap[state.selectedItem]
-        if (treeItem == undefined) {
-          // Defaults to ''
-        } else if (treeItem.type == 'folder') {
-          parentFolder = state.selectedItem
-        } else if (treeItem.type == 'file') {
-          parentFolder = state.selectedItem.split('/').slice(0, -1).join('/')
+  emitter.on('upload-file', async () => {
+    log('upload-file')
+    const options = {
+      types: [
+        {
+          description: "Text Files",
+          accept: {
+            "text/*": [".txt", ".csv", ".py", ".mpy", ".md"]
+          }
+        },
+        {
+          description: "Images",
+          accept: {
+            "image/*": [".jpg", ".jpeg", ".png"]
+          }
         }
-      }
-      let newFile = createFile({
-        path: parentFolder + '/' + file.name,
-        content: content
-      })
-      await saveFile(newFile.path, newFile.editor.content)
-      state.editingFile = newFile
-      state.selectedItem = newFile.path
-      state.isUploading = false
-      emitter.emit('refresh-files')
+      ]
+    }
+    const [fileHandle] = await window.showOpenFilePicker(options)
+    if (fileHandle) {
+      const file = await fileHandle.getFile()
+      state.isUploading = true
       emitter.emit('render')
-    })
-    reader.readAsText(file)
+      const reader = new FileReader()
+      reader.addEventListener('load', async () => {
+        let content = reader.result
+        let parentFolder = ''
+        if (state.selectedItem != null) {
+          const treeItem = state.boardFilesMap[state.selectedItem]
+          if (treeItem == undefined) {
+            // Defaults to ''
+          } else if (treeItem.type == 'folder') {
+            parentFolder = state.selectedItem
+          } else if (treeItem.type == 'file') {
+            parentFolder = state.selectedItem.split('/').slice(0, -1).join('/')
+          }
+        }
+        let newFile = createFile({
+          path: parentFolder + '/' + file.name,
+          content: content
+        })
+        await saveFile(newFile.path, newFile.editor.content)
+        state.editingFile = newFile
+        state.selectedItem = newFile.path
+        state.isUploading = false
+        emitter.emit('refresh-files')
+        emitter.emit('render')
+      })
+      reader.readAsText(file)
+    }
   })
 
 }

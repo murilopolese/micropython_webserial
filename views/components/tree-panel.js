@@ -63,7 +63,13 @@ export function TreePanel(state, emit) {
       size: 'small',
       disabled: state.selectedItem == null,
       onClick: () => emit('start-renaming-item')
-    })
+    }),
+    Button({
+      icon: `arrow-up.svg`,
+      size: 'small',
+      disabled: !state.isConnected,
+      onClick: () => emit('upload-file')
+    }),
   ]
 
   if (state.isCreatingFile) {
