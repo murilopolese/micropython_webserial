@@ -4,17 +4,10 @@ import { ReplPanel } from './components/repl-panel.js'
 import { TreePanel } from './components/tree-panel.js'
 
 export function EditorView(state, emit) {
-  function onDrop(e) {
-    e.preventDefault()
-    emit('upload-file', e)
-  }
-  function onDragOver(e) {
-    e.preventDefault()
-  }
   // TODO: solve this with css
   const w = state.isTreePanelOpen ? 'width: calc(100% - 300px)' : ''
   return html`
-    <div id="working-area" ondrop=${onDrop} ondragover=${onDragOver}>
+    <div id="working-area">
       ${Toolbar(state, emit)}
       <div class="row">
         ${TreePanel(state, emit)}
