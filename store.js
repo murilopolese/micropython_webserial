@@ -1,325 +1,41 @@
-window.requestFileSystem = window.requestFileSystem || window.webkitRequestFileSystem
+// Aliases
 const log = console.log
 
+// Component classes
 import { CodeMirrorEditor } from './views/components/elements/editor.js'
 import { XTerm } from './views/components/elements/terminal.js'
 
-let port
-let reader
-let writer
-
-const newFileContent = ``
-const HELPER_CODE = `import os
-import json
-os.chdir('/')
-def is_directory(path):
-  return True if os.stat(path)[0] == 0x4000 else False
-
-def get_all_files(path, array_of_files = []):
-  files = os.ilistdir(path)
-  for file in files:
-    is_folder = file[1] == 16384
-    p = path + '/' + file[0]
-    array_of_files.append({
-        "path": p,
-        "type": "folder" if is_folder else "file"
-    })
-    if is_folder:
-        array_of_files = get_all_files(p, array_of_files)
-  return array_of_files
-
-
-def ilist_all(path):
-  print(json.dumps(get_all_files(path)))
-
-def delete_folder(path):
-  files = get_all_files(path)
-  for file in files:
-    if file['type'] == 'file':
-        os.remove(file['path'])
-  for file in reversed(files):
-    if file['type'] == 'folder':
-        os.rmdir(file['path'])
-  os.rmdir(path)
-`
-
-function sleep(millis) {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      resolve()
-    }, millis)
-  })
-}
+import { micropythonWebserial } from './micropython-webserial.js'
+import { fileCreator } from './util.js'
 
 export async function store(state, emitter) {
-  state.editingFile = null
-  state.isConnecting = false
-  state.isConnected = false
-  state.isTerminalBound = false
-  state.boardFiles = []
-  state.isLoadingFiles = false
-  state.isSaving = false
-  state.isRemoving = false
-  state.isCreatingFile = false
-  state.isCreatingFolder = false
+  const {
+    readForeverAndReport,
+    connect,
+    disconnect,
+    write,
+    readUntil,
+    getPrompt,
+    reset,
+    enterRawRepl,
+    exitRawRepl,
+    executeRaw,
+    runHelper,
+    getBoardFiles,
+    loadFile,
+    saveFile,
+    removeFile,
+    createBoardFile,
+    createBoardFolder,
+    renameItem,
+    run,
+    removeFolder
+  } = await micropythonWebserial(state, emitter)
 
-  state.readingBuffer = ''
-  state.readingUntil = null
-  state.resolveReadingUntilPromise = () => false
-  state.rejectReadingUntilPromise = () => false
-
-  state.savedPanelHeight = PANEL_DEFAULT
-  state.panelHeight = PANEL_CLOSED
-  state.resizePanel = function(e) {
-    state.panelHeight = (PANEL_CLOSED/2) + document.body.clientHeight - e.clientY
-    if (state.panelHeight <= PANEL_CLOSED) {
-      state.savedPanelHeight = PANEL_DEFAULT
-    } else {
-      state.savedPanelHeight = state.panelHeight
-    }
-    emitter.emit('render')
-  }
-
-  const newFile = createEmptyFile()
-  newFile.editor.onChange = function() {
-    state.editingFile.hasChanges = true
-    emitter.emit('render')
-  }
-  state.editingFile = newFile
-  state.openedFolders = []
-  state.selectedItem = null // path of selected item (file or folder)
-
-  function createFile(args) {
-    const {
-      path,
-      content = newFileContent,
-      hasChanges = false
-    } = args
-    const id = generateHash()
-    const editor = state.cache(CodeMirrorEditor, `editor_${id}`)
-    editor.content = content
-    return {
-      id,
-      path,
-      editor,
-      hasChanges
-    }
-  }
-  function createEmptyFile() {
-    return createFile({
-      path: '/' + generateFileName(),
-      hasChanges: false
-    })
-  }
-
-  async function readForeverAndReport(cb) {
-    try {
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) {
-          // Allow the serial port to be closed later.
-          reader.releaseLock();
-          break;
-        }
-        if (value) {
-          cb(value);
-        }
-      }
-    } catch (error) {
-      // TODO: Handle non-fatal read error.
-    }
-  }
-  async function connect() {
-    return new Promise((resolve, reject) => {
-      navigator.serial.requestPort()
-        .then(async (port) => {
-          await port.open({ baudRate: 115200 })
-          reader = port.readable.getReader()
-          writer = port.writable.getWriter()
-          resolve(port)
-        })
-      . catch(reject)
-    })
-  }
-  async function disconnect() {
-    try {
-      writer.releaseLock()
-      reader.releaseLock()
-      await port.close()
-    } catch(e) {
-      console.log(`Can't disconnect`, e)
-    }
-    return Promise.resolve()
-  }
-  async function write(str) {
-    const textEncoder = new TextEncoder()
-    const uint8Array = textEncoder.encode(str)
-    await writer.write(uint8Array)
-  }
-  async function readUntil(token) {
-    if (state.readingUntil) {
-      // Already reading until
-      return Promise.reject(new Error('Already running "read until"'))
-    }
-    // Those variables are going to be referenced on emitter.on('data')
-    state.readingUntil = token
-    state.readingBuffer = ''
-    return new Promise((resolve, reject) => {
-      // Those functions are going to be called on emitter.on('data')
-      state.resolveReadingUntilPromise = (result) => {
-        state.readingUntil = null
-        state.readingBuffer = ''
-        state.resolveReadingUntilPromise = () => false
-        state.rejectReadingUntilPromise = () => false
-        resolve(result)
-      }
-      state.rejectReadingUntilPromise = (msg) => {
-        state.readingUntil = null
-        state.readingBuffer = ''
-        state.resolveReadingUntilPromise = () => false
-        state.rejectReadingUntilPromise = () => false
-        reject(new Error(msg))
-      }
-    })
-  }
-
-  // also known as stop
-  async function getPrompt() {
-    state.rejectReadingUntilPromise('Interrupt execution to get prompt')
-    write('\x03\x02')
-    await readUntil('>>>')
-  }
-  async function reset() {
-    state.readingUntil = '>>>'
-    state.readingBuffer = ''
-    const promise = new Promise((resolve, reject) => {
-      state.resolveReadingUntilPromise = resolve
-    })
-    write('\x04')
-    await promise
-    state.readingUntil = null
-    state.readingBuffer = ''
-    state.resolveReadingUntilPromise = null
-  }
-  async function enterRawRepl() {
-    write('\x01')
-    await readUntil('raw REPL; CTRL-B to exit')
-  }
-  async function exitRawRepl() {
-    write('\x02')
-    await readUntil('>>>')
-  }
-  async function executeRaw(code) {
-    const S = 128
-    for (let i = 0; i < code.length; i += S) {
-      const c = code.slice(i, i+S)
-      await write(c)
-      await sleep(10)
-    }
-    await write('\x04')
-    return await readUntil('\x04>')
-  }
-
-  async function runHelper() {
-    await getPrompt()
-    await enterRawRepl()
-    const out = await executeRaw(HELPER_CODE)
-    await exitRawRepl()
-    return out
-  }
-
-  async function getBoardFiles(path) {
-    await runHelper()
-    await enterRawRepl()
-    let out = await executeRaw(`print(json.dumps(get_all_files("")))`)
-    await exitRawRepl()
-
-    let files = JSON.parse(out.split('OK')[1].split('\x04')[0])
-
-    // Hold you hat, nested reduce ahead
-    // TODO: Optimize this step
-    let tree = files.reduce((r, file) => {
-      file.path.split('/')
-      .filter(a => a)
-      .reduce((childNodes, title) => {
-        let child = childNodes.find(n => n.title === title)
-        if (!child) {
-          child = {
-            title: title,
-            type: file.type,
-            path: file.path,
-            childNodes: []
-          }
-          childNodes.push(child)
-        }
-        // Sort by type, alphabetically
-        childNodes = childNodes.sort((a, b) => {
-          return b.type.localeCompare(a.type) || a.title.localeCompare(b.title)
-        })
-        return child.childNodes
-      }, r)
-      return r
-    }, [])
-    // Sort by type, alphabetically
-    tree = tree.sort((a, b) => {
-      return b.type.localeCompare(a.type) || a.title.localeCompare(b.title)
-    })
-    return tree
-  }
-  async function loadFile(path) {
-    await getPrompt()
-    await enterRawRepl()
-    let output = await executeRaw(
-      `with open('${path}','r') as f:\n while 1:\n  b=f.read(256)\n  if not b:break\n  print(b,end='')`
-    )
-    await exitRawRepl()
-    return output.split('OK')[1].split('\x04')[0]
-  }
-  async function saveFile(path, content) {
-    await getPrompt()
-    await enterRawRepl()
-    await executeRaw(`f=open('${path}','wb')\nw=f.write`)
-    for (let i = 0; i < content.length; i += 128) {
-      const c = content.slice(i, i+128)
-      const d = new TextEncoder().encode(c)
-      await executeRaw(`w(bytes([${d}]))`)
-    }
-    await executeRaw(`f.close()`)
-    await exitRawRepl()
-  }
-  async function removeFile(path) {
-    await getPrompt()
-    await enterRawRepl()
-    let command = `import uos\n`
-        command += `try:\n`
-        command += `  uos.remove("${path}")\n`
-        command += `except OSError:\n`
-        command += `  print(0)\n`
-    await executeRaw(command)
-    await exitRawRepl()
-  }
-  async function createBoardFile(path) {
-    await getPrompt()
-    await enterRawRepl()
-    let command = `f=open('${path}', 'w');f.close()`
-    await executeRaw(command)
-    await exitRawRepl()
-  }
-  async function createBoardFolder(path) {
-    await getPrompt()
-    await enterRawRepl()
-    let command = `import os;os.mkdir('${path}')`
-    await executeRaw(command)
-    await exitRawRepl()
-  }
-  async function renameItem(srcPath, destPath) {
-    await getPrompt()
-    await enterRawRepl()
-    let command = `import os;os.rename('${srcPath}','${destPath}')`
-    await executeRaw(command)
-    await exitRawRepl()
-  }
-
+  const {
+    createFile,
+    createEmptyFile
+  } = fileCreator(state.cache)
 
   // CONNECTION
   emitter.on('connect', async() => {
@@ -329,8 +45,7 @@ export async function store(state, emitter) {
     emitter.emit('render')
 
     try {
-      port = await connect()
-      state.port = port
+      state.port = await connect()
       state.isConnected = true
 
       // Toggle panel accordingly
@@ -387,24 +102,10 @@ export async function store(state, emitter) {
 
   // CODE EXECUTION
   emitter.on('run', async () => {
-    log('run')
-    await getPrompt()
     const code = state.editingFile.editor.editor.state.doc.toString()
+    log('run', code)
     emitter.emit('open-terminal-panel')
-    emitter.emit('render')
-    try {
-      await enterRawRepl()
-      for (let i = 0; i < code.length; i += 128) {
-        const c = code.slice(i, i+128)
-        await write(c)
-        await sleep(10)
-      }
-      await write('\x04')
-      await readUntil('\x04>')
-      await exitRawRepl()
-    } catch(e) {
-      log('error', e)
-    }
+    await run(code)
   })
   emitter.on('stop', async () => {
     log('stop')
@@ -533,10 +234,10 @@ export async function store(state, emitter) {
     emitter.emit('render')
   })
   emitter.on('save', async () => {
-    log('save')
+    const code = state.editingFile.editor.editor.state.doc.toString()
+    log('save', code)
     state.isSaving = true
     emitter.emit('render')
-    const code = state.editingFile.editor.editor.state.doc.toString()
     await saveFile(state.editingFile.path, code)
     state.isSaving = false
     state.selectedItem = state.editingFile.path
@@ -553,18 +254,16 @@ export async function store(state, emitter) {
 
     let selectedItem = state.boardFilesMap[state.selectedItem]
 
-    await getPrompt()
     if (selectedItem.type == 'file') {
       await removeFile(selectedItem.path)
       state.editingFile = createEmptyFile()
       state.selectedItem = null
-    } else {
-      await runHelper()
-      await enterRawRepl()
-      await executeRaw(`delete_folder('${selectedItem.path}')`)
-      await exitRawRepl()
+    } else if (selectedItem.type == 'folder') {
+      await removeFolder(selectedItem.path)
+      // Remove the folder from opened folders
       const i = state.openedFolders.indexOf(selectedItem.path)
       state.openedFolders.splice(i, 1)
+      // Create new file if editing file was inside the deleted folder
       if (state.editingFile.path.indexOf(selectedItem.path) == 0) {
         state.editingFile = createEmptyFile()
         state.selectedItem = null
@@ -698,21 +397,4 @@ export async function store(state, emitter) {
     saveAs(blob, state.boardFilesMap[state.editingFile.path].title);
   })
 
-}
-
-function generateHash() {
-  return `${Date.now()}_${parseInt(Math.random()*1024)}`
-}
-
-function generateFileName(filename) {
-  if (filename) {
-    let name = filename.split('.py')
-    return `${name[0]}_${Date.now()}.py`
-  } else {
-    return `${pickRandom(adjectives)}_${pickRandom(nouns)}.py`
-  }
-}
-
-function pickRandom(array) {
-  return array[parseInt(Math.random()*array.length)]
 }
