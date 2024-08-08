@@ -15,6 +15,6 @@ function App(state, emit) {
 
 let app = Choo()
 app.use(model)
-app.use(store);
+app.use(store)
 app.route('*', App)
 app.mount('#app')

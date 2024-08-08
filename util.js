@@ -87,3 +87,22 @@ export function fileCreator(cache) {
   }
   return { createFile, createEmptyFile }
 }
+
+export function base64ToUint8Array(base64) {
+    const binaryString = atob(base64)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i)
+    }
+    return bytes
+}
+
+export function extract(out) {
+  const indexOk = out.indexOf('OK')
+  const indexEnd = out.indexOf('\x04')
+
+  if (indexOk == -1 || indexEnd == -1) {
+    return []
+  }
+  return out.slice(indexOk+2, indexEnd)
+}

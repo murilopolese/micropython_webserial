@@ -2,11 +2,10 @@
 const log = console.log
 
 // Component classes
-import { CodeMirrorEditor } from './views/components/elements/editor.js'
 import { XTerm } from './views/components/elements/terminal.js'
 
 import { micropythonWebserial } from './micropython-webserial.js'
-import { fileCreator } from './util.js'
+import { fileCreator, base64ToUint8Array } from './util.js'
 
 export async function store(state, emitter) {
   const {
@@ -29,7 +28,9 @@ export async function store(state, emitter) {
     createBoardFolder,
     renameItem,
     run,
-    removeFolder
+    removeFolder,
+    uploadFile,
+    downloadFile
   } = await micropythonWebserial(state, emitter)
 
   const {
@@ -125,19 +126,16 @@ export async function store(state, emitter) {
   })
 
   // HANDLING DATA FROM SERIAL
-  emitter.on('data', (buff) => {
-    const decoder = new TextDecoder()
-    const data = decoder.decode(buff)
-    if (state.readingUntil) {
-      state.readingBuffer += data
+  emitter.on('data', async (buff) => {
+    if (state.readingUntil != null) {
+      state.readingBuffer += (new TextDecoder()).decode(buff)
       if (state.readingBuffer.indexOf(state.readingUntil) != -1) {
-        let response = state.readingBuffer
+        const response = state.readingBuffer
         state.readingUntil = null
-        state.readingBuffer = ''
+        state.readingBuffer = null
         state.resolveReadingUntilPromise(response)
       }
     }
-    // log('data', data)
   })
 
   // PANEL
@@ -217,6 +215,7 @@ export async function store(state, emitter) {
   // FILE MANAGEMENT
   emitter.on('load-file', async (path) => {
     log('load-file', path)
+
     if (state.editingFile.hasChanges) {
       const response = confirm('Your file has unsaved changes. Are you sure you want to proceed?')
       if (!response) return false
@@ -339,30 +338,14 @@ export async function store(state, emitter) {
 
   emitter.on('upload-file', async () => {
     log('upload-file')
-    const options = {
-      types: [
-        {
-          description: "Text Files",
-          accept: {
-            "text/*": [".txt", ".csv", ".py", ".mpy", ".md"]
-          }
-        },
-        {
-          description: "Images",
-          accept: {
-            "image/*": [".jpg", ".jpeg", ".png"]
-          }
-        }
-      ]
-    }
-    const [fileHandle] = await window.showOpenFilePicker(options)
+    const [fileHandle] = await window.showOpenFilePicker()
     if (fileHandle) {
       const file = await fileHandle.getFile()
       state.isUploading = true
       emitter.emit('render')
       const reader = new FileReader()
       reader.addEventListener('load', async () => {
-        let content = reader.result
+        // Figuring out who will be the parent of this new file
         let parentFolder = ''
         if (state.selectedItem != null) {
           const treeItem = state.boardFilesMap[state.selectedItem]
@@ -374,27 +357,35 @@ export async function store(state, emitter) {
             parentFolder = state.selectedItem.split('/').slice(0, -1).join('/')
           }
         }
+        // Creating file
+        const decoder = new TextDecoder()
+        let content = decoder.decode(reader.result)
         let newFile = createFile({
           path: parentFolder + '/' + file.name,
           content: content
         })
-        await saveFile(newFile.path, newFile.editor.content)
+        // Transfer file to the board
+        await uploadFile(newFile.path, reader.result)
+        // Load the new file as the currently selected file
         state.editingFile = newFile
         state.selectedItem = newFile.path
         state.isUploading = false
         emitter.emit('refresh-files')
         emitter.emit('render')
       })
-      reader.readAsText(file)
+      reader.readAsArrayBuffer(file)
     }
   })
   emitter.on('download-file', async () => {
-    log('download-file')
-    const blob = new Blob(
-      [state.editingFile.editor.content],
-      {type: "text/x-python;charset=utf-8"}
-    );
-    saveAs(blob, state.boardFilesMap[state.editingFile.path].title);
+    log('download-file', state.selectedItem)
+    state.isDownloading = true
+    emitter.emit('render')
+    const fileContent = await downloadFile(state.selectedItem)
+    const buffer = base64ToUint8Array(fileContent)
+    const blob = new Blob([buffer])
+    saveAs(blob, state.boardFilesMap[state.selectedItem].title);
+    state.isDownloading = false
+    emitter.emit('render')
   })
 
 }

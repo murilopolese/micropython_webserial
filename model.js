@@ -11,8 +11,10 @@ export async function model(state, emitter) {
   state.isRemoving = false
   state.isCreatingFile = false
   state.isCreatingFolder = false
+  state.isUploading = false
+  state.isDownloading = false
 
-  state.readingBuffer = ''
+  state.readingBuffer = null
   state.readingUntil = null
   state.resolveReadingUntilPromise = () => false
   state.rejectReadingUntilPromise = () => false

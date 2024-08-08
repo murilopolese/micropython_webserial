@@ -1,4 +1,4 @@
-import { sleep, HELPER_CODE } from './util.js'
+import { sleep, HELPER_CODE, extract } from './util.js'
 
 export async function micropythonWebserial(state, emitter) {
 
@@ -59,14 +59,14 @@ export async function micropythonWebserial(state, emitter) {
       // Those functions are going to be called on emitter.on('data')
       state.resolveReadingUntilPromise = (result) => {
         state.readingUntil = null
-        state.readingBuffer = ''
+        state.readingBuffer = null
         state.resolveReadingUntilPromise = () => false
         state.rejectReadingUntilPromise = () => false
         resolve(result)
       }
       state.rejectReadingUntilPromise = (msg) => {
         state.readingUntil = null
-        state.readingBuffer = ''
+        state.readingBuffer = null
         state.resolveReadingUntilPromise = () => false
         state.rejectReadingUntilPromise = () => false
         reject(new Error(msg))
@@ -126,16 +126,17 @@ export async function micropythonWebserial(state, emitter) {
       await readUntil('\x04>')
       await exitRawRepl()
     } catch(e) {
-      log('error', e)
+      console.log('error', e)
     }
   }
   async function getBoardFiles(path) {
     await runHelper()
     await enterRawRepl()
-    let out = await executeRaw(`print(json.dumps(get_all_files("")))`)
+    const out = await executeRaw(`print(json.dumps(get_all_files("")))`)
     await exitRawRepl()
 
-    let files = JSON.parse(out.split('OK')[1].split('\x04')[0])
+    const result = extract(out)
+    const files = JSON.parse(result)
 
     // Hold you hat, nested reduce ahead
     // TODO: Optimize this step
@@ -174,17 +175,15 @@ export async function micropythonWebserial(state, emitter) {
       `with open('${path}','r') as f:\n while 1:\n  b=f.read(256)\n  if not b:break\n  print(b,end='')`
     )
     await exitRawRepl()
-    return output.split('OK')[1].split('\x04')[0]
+    return extract(output)
   }
   async function saveFile(path, content) {
+    // Content is a string
     await getPrompt()
     await enterRawRepl()
     await executeRaw(`f=open('${path}','wb')\nw=f.write`)
-    for (let i = 0; i < content.length; i += 128) {
-      const c = content.slice(i, i+128)
-      const d = new TextEncoder().encode(c)
-      await executeRaw(`w(bytes([${d}]))`)
-    }
+    const d = new TextEncoder().encode(content)
+    await executeRaw(`w(bytes([${d}]))`)
     await executeRaw(`f.close()`)
     await exitRawRepl()
   }
@@ -228,6 +227,35 @@ export async function micropythonWebserial(state, emitter) {
     await exitRawRepl()
   }
 
+  async function uploadFile(path, content) {
+    // Content is a typed array
+    await getPrompt()
+    await enterRawRepl()
+    await executeRaw(`f=open('${path}','wb')\nw=f.write`)
+    for (let i = 0; i < content.byteLength; i += 128) {
+      const c = new Uint8Array(content.slice(i, i+128))
+      await executeRaw(`w(bytes([${c}]))`)
+    }
+    await executeRaw(`f.close()`)
+    await exitRawRepl()
+    return Promise.resolve()
+  }
+
+  async function downloadFile(path) {
+    await getPrompt()
+    await enterRawRepl()
+    const output = await executeRaw(
+`from binascii import b2a_base64 as encode
+with open('${path}','rb') as f:
+  b = encode( f.read(), newline=False )
+  for i in b:
+    print( chr(i), end='' )
+`
+    )
+    await exitRawRepl()
+    return extract(output)
+  }
+
   return {
     readForeverAndReport,
     connect,
@@ -249,6 +277,8 @@ export async function micropythonWebserial(state, emitter) {
     createBoardFile,
     createBoardFolder,
     renameItem,
+    uploadFile,
+    downloadFile
   }
 
 }
