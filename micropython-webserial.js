@@ -243,11 +243,11 @@ export async function micropythonWebserial(state, emitter) {
 
   async function downloadFile(path) {
     await getPrompt()
+    await runHelper()
     await enterRawRepl()
     const output = await executeRaw(
-`from binascii import b2a_base64 as encode
-with open('${path}','rb') as f:
-  b = encode( f.read(), newline=False )
+`with open('${path}','rb') as f:
+  b = b2a_base64(f.read())
   for i in b:
     print( chr(i), end='' )
 `
