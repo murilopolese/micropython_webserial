@@ -1,11 +1,11 @@
 import { CodeMirrorEditor } from './views/components/elements/editor.js'
 
-
 export const newFileContent = ``
 
 export const HELPER_CODE = `import os
 import json
 os.chdir('/')
+
 def is_directory(path):
   return True if os.stat(path)[0] == 0x4000 else False
 
@@ -35,6 +35,28 @@ def delete_folder(path):
     if file['type'] == 'folder':
         os.rmdir(file['path'])
   os.rmdir(path)
+
+def b2a_base64(data):
+  base64_chars = b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  encoded = bytearray()
+  i = 0
+  while i < len(data):
+    chunk = data[i:i+3]
+    bin_string = ''
+    for byte in chunk:
+      bin_string += f'{byte:08b}'
+    while len(bin_string) < 24:
+      bin_string += '00000000'
+    for j in range(0, 24, 6):
+      segment = bin_string[j:j+6]
+      index = int(segment, 2)
+      encoded.append(base64_chars[index])
+    if len(chunk) < 3:
+      for _ in range(3 - len(chunk)):
+        encoded[-1] = ord(b'=')
+    i += 3
+  # Convert the bytearray to bytes and add a newline
+  return bytes(encoded)
 `
 
 export function sleep(millis) {
