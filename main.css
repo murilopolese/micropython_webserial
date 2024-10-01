@@ -470,6 +470,7 @@ button.small .icon {
 #overlay {
   position: fixed;
   display: flex;
+  flex-direction: column;
   background: rgba(255, 255, 255, 0.5);
   align-items: center;
   justify-content: center;
@@ -496,6 +497,11 @@ button.small .icon {
   padding: 1em 1.5em;
 }
 
+#overlay .message {
+  width: 800px;
+  background: white;
+  padding: 3em;
+}
 
 #tree-panel {
   width: 0px;
@@ -576,7 +582,7 @@ button.small .icon {
   width: 100%;
 }
 
-#tree-items *:focus {  
+#tree-items *:focus {
   outline: none;
 }
 summary {
