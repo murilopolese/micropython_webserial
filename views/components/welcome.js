@@ -24,13 +24,10 @@ export function Welcome(state, emit) {
               <h1>Welcome to Arduino Lab for MicroPython </h1>
               <p>
                 This software is part of Arduino LABS program, for experimental use only.
-                <a target="_blank" href="https://labs.arduino.cc/en/labs/micropython">
-                  Learn more
-                </a>
               </p>
               <p>Requires: <strong>Chrome browser</strong></p>
               <p>
-                <a target="_blank" href="https://labs.arduino.cc/en/labs/micropython">
+                <a target="_blank" href="https://www.arduino.cc/en/terms-conditions">
                   Terms of Service
                 </a>
               </p>
