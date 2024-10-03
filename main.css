@@ -595,3 +595,170 @@ details[open] > summary {
 .children {
   padding-left: 15px;
 }
+
+#modal {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.5);
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  pointer-events: all;
+  opacity: 1;
+}
+
+.dialog {
+  width: 650px;
+  display: inline-flex;
+  padding: 0px 4px;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 5px;
+  background: #FFF;
+  box-shadow: 0px 4px 20px 0px rgba(0, 0, 0, 0.25);
+}
+
+.dialog * {
+  font-family: "Open Sans";
+}
+
+.dialog .header {
+  display: flex;
+  padding: 0px 50px;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  align-self: stretch;
+  border-bottom: 1px solid var(--Grayscale-Smoke, #C9D2D2);
+  background: #FFF;
+}
+
+.dialog .header .title {
+  display: flex;
+  width: 550px;
+  height: 54px;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.dialog .image {
+  display: flex;
+  width: 650px;
+  height: 190px;
+  justify-content: center;
+  align-items: center;
+  background: var(--Grayscale-Clouds, #ECF1F1);
+}
+
+.dialog .body {
+  display: flex;
+  padding: 28px 130px 36px 130px;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  align-self: stretch;
+}
+
+.dialog .body h1,
+.dialog .body p {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+.dialog .body a:hover,
+.dialog .body a:active,
+.dialog .body a:visited,
+.dialog .body a {
+  font-family: "Open Sans";
+  color: var(--TealScale-Teal3, #008184);
+  font-weight: 700;
+  text-decoration: none;
+}
+.dialog .body h1 {
+  color: var(--Grayscale-Jet, var(--Grayscale-Jet, #374146));
+  font-family: "Open Sans";
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 170%; /* 34px */
+  letter-spacing: 0.2px;
+}
+.dialog .body p,
+.dialog .body strong {
+  color: var(--Grayscale-Jet, #374146);
+  font-family: "Open Sans";
+  font-style: normal;
+  line-height: 170%; /* 23.8px */
+  letter-spacing: 0.14px;
+  font-size: 14px;
+}
+.dialog .body p {
+  font-weight: 400;
+}
+
+.dialog .call-to-action {
+  background: var(--Grayscale-Feather, #F7F9F9);
+  display: flex;
+  padding-bottom: 4px;
+  flex-direction: row;
+  align-items: flex-start;
+  align-self: stretch;
+  height: 78px;
+  padding: 0px 130px;
+  justify-content: space-between;
+  align-items: center;
+  align-self: stretch;
+}
+
+.call-to-action .checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox label {
+  color: var(--Grayscale-Black, #000);
+  /* Open Sans/X-Small */
+  font-family: "Open Sans";
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 170%; /* 23.8px */
+  letter-spacing: 0.14px;
+}
+
+.checkbox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+}
+
+.call-to-action button {
+  display: flex;
+  flex-direction: row;
+  padding: 5px 20px;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  border-radius: 32px;
+  background: var(--TealScale-Teal3, #008184);
+  width: auto;
+  height: auto;
+  color: var(--Grayscale-White, #FFF);
+  text-align: center;
+  font-family: "Open Sans";
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 170%; /* 27.2px */
+  letter-spacing: 0.16px;
+  text-transform: uppercase;
+}
