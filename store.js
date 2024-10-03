@@ -388,4 +388,12 @@ export async function store(state, emitter) {
     emitter.emit('render')
   })
 
+  emitter.on('dismiss-welcome', () => {
+    state.welcomed = true
+    emitter.emit('render')
+  })
+  emitter.on('set-welcomed', (value) => {
+    state.welcomed = value
+    localStorage.setItem('welcomed', value)
+  })
 }

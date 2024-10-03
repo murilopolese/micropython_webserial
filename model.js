@@ -41,4 +41,7 @@ export async function model(state, emitter) {
   state.openedFolders = []
   state.selectedItem = null // path of selected item (file or folder)
 
+  const welcomed = localStorage.getItem('welcomed')
+  state.welcomed = !!welcomed
+
 }
